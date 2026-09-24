@@ -1,0 +1,194 @@
+@import "tailwindcss";
+
+/* --------------------------------------------------------------------------
+   BreadBoardAI design tokens
+   Light, paper-like SaaS surface with "ink on whiteboard" brand colors.
+   -------------------------------------------------------------------------- */
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-hand: var(--font-hand), "Bradley Hand", "Segoe Print", cursive;
+
+  /* Brand — marker ink blue/violet */
+  --color-brand-50: #f0f3ff;
+  --color-brand-100: #e3e8ff;
+  --color-brand-200: #c9d2fe;
+  --color-brand-300: #a6b2fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #362fa4;
+  --color-brand-900: #2d2a7f;
+
+  /* Accent — highlighter amber */
+  --color-accent-100: #fef3c7;
+  --color-accent-200: #fde68a;
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+
+  /* Marker colors used by the whiteboard illustrations */
+  --color-marker-red: #ef4444;
+  --color-marker-green: #10b981;
+  --color-marker-blue: #3b82f6;
+
+  /* Surfaces */
+  --color-paper: #fbfbfd;
+  --color-ink: #0c1222;
+
+  --shadow-card: 0 1px 2px 0 rgb(12 18 34 / 0.04), 0 8px 24px -12px rgb(12 18 34 / 0.12);
+  --shadow-float: 0 18px 50px -18px rgb(12 18 34 / 0.28);
+
+  --animate-fade-up: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-draw: draw 2.4s ease-in-out forwards;
+  --animate-float-slow: float-slow 6s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.8s linear infinite;
+  --animate-pulse-ring: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(99 102 241 / 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgb(99 102 241 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(99 102 241 / 0);
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: var(--color-brand-200);
+  color: var(--color-brand-900);
+}
+
+@utility bg-grid {
+  background-image: linear-gradient(
+      to right,
+      rgb(12 18 34 / 0.05) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgb(12 18 34 / 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@utility bg-dots {
+  background-image: radial-gradient(rgb(12 18 34 / 0.09) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Hand-drawn marker underline for hero headlines. */
+@utility marker-underline {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+@utility marker-underline-bar {
+  content: "";
+  position: absolute;
+  left: -0.08em;
+  right: -0.08em;
+  bottom: -0.12em;
+  height: 0.38em;
+  background: linear-gradient(
+    100deg,
+    rgb(251 191 36 / 0.55) 0%,
+    rgb(251 191 36 / 0.85) 40%,
+    rgb(245 158 11 / 0.6) 100%
+  );
+  border-radius: 0.3em 0.6em 0.4em 0.5em;
+  transform: rotate(-0.6deg);
+}
+
+/* Thin, unobtrusive scrollbar for the dashboard sidebar. */
+@utility scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(12 18 34 / 0.18) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgb(12 18 34 / 0.18);
+    border-radius: 999px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
