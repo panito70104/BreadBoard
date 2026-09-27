@@ -290,7 +290,9 @@ export async function runGeneration(videoId: string): Promise<void> {
         title: source === "claude" && storyboard.videoTitle ? storyboard.videoTitle : video.title,
         storyboard,
         warnings: [...result.warnings, ...narration.warnings],
-        durationSeconds: storyboard.totalSeconds,
+        // Scene lengths are measured off the voice and carry a decimal;
+        // the column is an integer and the driver would not round it for us.
+        durationSeconds: Math.round(storyboard.totalSeconds),
         source,
         notice: notices.length ? notices.join(" ") : null,
         error: null,

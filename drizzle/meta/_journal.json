@@ -15,6 +15,20 @@
       "when": 1790454749897,
       "tag": "0001_profile_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790544178642,
+      "tag": "0002_cynical_iceman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790544231949,
+      "tag": "0003_small_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

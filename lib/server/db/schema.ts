@@ -147,13 +147,19 @@ export const videos = pgTable(
     check("videos_status_check", sql`${table.status} in ('generating', 'ready', 'failed')`),
     check(
       "videos_stage_check",
-      sql`${table.stage} in ('queued', 'reading', 'storyboarding', 'finalizing', 'done')`,
+      sql`${table.stage} in ('queued', 'reading', 'storyboarding', 'voicing', 'finalizing', 'done')`,
     ),
     check(
       "videos_style_check",
       sql`${table.style} in ('classic-whiteboard', 'paper-desk', 'color-markers')`,
     ),
-    check("videos_requested_minutes_check", sql`${table.requestedMinutes} in (1, 3, 5)`),
+    check(
+      "videos_requested_minutes_check",
+      // Minutes held while the video generates, then the minutes it really
+      // cost. It used to be the length the student picked, which could only be
+      // 1, 3 or 5 — now nobody picks, so it is whatever the plan had left.
+      sql`${table.requestedMinutes} > 0`,
+    ),
     check("videos_source_check", sql`${table.source} in ('claude', 'mock')`),
     index("videos_owner_created_idx").on(table.ownerId, table.createdAt.desc()),
   ],

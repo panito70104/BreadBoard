@@ -1,0 +1,2 @@
+ALTER TABLE "videos" DROP CONSTRAINT "videos_requested_minutes_check";--> statement-breakpoint
+ALTER TABLE "videos" ADD CONSTRAINT "videos_requested_minutes_check" CHECK ("videos"."requested_minutes" > 0);

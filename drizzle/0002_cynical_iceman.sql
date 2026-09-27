@@ -1,0 +1,2 @@
+ALTER TABLE "videos" DROP CONSTRAINT "videos_stage_check";--> statement-breakpoint
+ALTER TABLE "videos" ADD CONSTRAINT "videos_stage_check" CHECK ("videos"."stage" in ('queued', 'reading', 'storyboarding', 'voicing', 'finalizing', 'done'));
