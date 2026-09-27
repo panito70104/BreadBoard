@@ -36,6 +36,10 @@ export interface UsageInfo {
   minutesLimit: number;
   minutesRemaining: number;
   maxVideoMinutes: number;
+  /** Null on the plans that only meter minutes. */
+  videosLimit: number | null;
+  videosUsed: number;
+  videosRemaining: number | null;
   periodStart: string;
   periodEnd: string;
 }
@@ -232,8 +236,18 @@ export interface SubscriptionPlan {
   interval: "month";
   /** Minutes of rendered video included per month — the billing unit. */
   minutesPerMonth: number;
+  /**
+   * Generations allowed per month, or `null` for as many as the minutes cover.
+   *
+   * Minutes alone do not bound what a plan costs to serve: every generation is
+   * a model call and a voice call whatever it produces, so a free tier metered
+   * only in minutes can be spent one short video at a time and cost several
+   * times what it looks like. Paid plans are priced with that headroom; the
+   * free one is not, so it gets counted.
+   */
+  videosPerMonth: number | null;
   /** Cap on the length of a single video. */
-  maxDurationMinutes: VideoDurationMinutes;
+  maxDurationMinutes: number;
   features: PlanFeature[];
   ctaLabel: string;
   highlighted?: boolean;

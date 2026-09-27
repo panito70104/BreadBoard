@@ -15,7 +15,7 @@
 
 import { ICON_VOCABULARY } from "@/lib/storyboard/icons";
 import { LAYOUTS, LAYOUT_IDS, slotsOf } from "@/lib/storyboard/layouts";
-import { LIMITS } from "@/lib/storyboard/schema";
+import { LIMITS, materialCeilingSeconds } from "@/lib/storyboard/schema";
 import type { VideoStyle } from "@/types";
 
 function layoutCatalog(): string {
@@ -184,6 +184,17 @@ export interface StoryboardRequest {
   documentPages?: number;
 }
 
+/**
+ * The longest this video may be: what the plan allows, and what the document
+ * has the material for, whichever is less.
+ */
+export function ceilingFor(request: {
+  allowedSeconds: number;
+  documentWords: number;
+}): number {
+  return Math.min(request.allowedSeconds, materialCeilingSeconds(request.documentWords));
+}
+
 /** The lengths on offer, each with the narration that fills it. */
 function lengthMenu(allowedSeconds: number): string {
   const offered = LIMITS.videoLengths.filter((seconds) => seconds <= allowedSeconds);
@@ -205,6 +216,8 @@ export function buildStoryboardUserPrompt(request: StoryboardRequest): string {
     `El documento tiene unas ${request.documentWords} palabras` +
     (request.documentPages ? ` en ${request.documentPages} páginas.` : ".");
 
+  const ceiling = ceilingFor(request);
+
   return [
     `Documento: ${request.documentName}`,
     size,
@@ -213,9 +226,8 @@ export function buildStoryboardUserPrompt(request: StoryboardRequest): string {
       : "El estudiante no pidió nada específico: explica lo más importante del documento y decide tú la duración.",
     "",
     "Duraciones que puedes elegir:",
-    lengthMenu(request.allowedSeconds),
+    lengthMenu(ceiling),
     "",
-    `Como referencia: a ${LIMITS.wordBudgetPerSecond} palabras por segundo, ${request.documentWords} palabras de documento dan para mucho menos video del que parece — un documento solo llena el tiempo que tiene ideas distintas que explicar, no el que tiene palabras.`,
     "Elige un total, reparte esos segundos entre las escenas — sus durationSeconds tienen que sumar exactamente ese total — y escribe la narración para llenarlo, sin pasarte del tope de palabras de esa opción: cada palabra de más obliga a leer el guion más deprisa de lo que suena bien.",
     "Decide el idioma: el del documento, salvo que el estudiante haya pedido otro arriba — en ese caso traduce el guion entero a ese idioma.",
     `Estilo visual: ${request.style}.`,

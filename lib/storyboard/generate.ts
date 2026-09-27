@@ -23,6 +23,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import {
   buildStoryboardUserPrompt,
+  ceilingFor,
   STORYBOARD_SYSTEM_PROMPT,
   type StoryboardRequest,
 } from "@/lib/storyboard/prompt";
@@ -61,12 +62,17 @@ async function ask(
         format: zodOutputFormat(strictStoryboardSchema),
       },
       // The system prompt is generated from the layout and icon catalogs, so it
-      // is byte-stable across requests and caches cleanly.
+      // is byte-stable across requests and caches cleanly. It is also ~9,800
+      // tokens, which makes the cache worth getting right: at the default
+      // five-minute TTL a student generating one video every so often pays the
+      // 1.25x write every time and never reads it back — more expensive than
+      // not caching at all. An hour costs 2x to write and covers a whole study
+      // session, which is how this actually gets used.
       system: [
         {
           type: "text",
           text: STORYBOARD_SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
+          cache_control: { type: "ephemeral", ttl: "1h" },
         },
       ],
       messages: [{ role: "user", content: message }],
@@ -87,8 +93,14 @@ async function ask(
         `[storyboard] ${cause.status} ${cause.name}`,
         JSON.stringify({ requestId: cause.requestID, error: cause.error }),
       );
+      // A 400 is usually our fault, not the student's — a schema we sent, or an
+      // account that ran out of credit. Either way there is nothing they can do
+      // about it, and "respondió 400" reads like their document broke something.
+      const ours = /credit balance|quota|billing/i.test(cause.message);
       throw new StoryboardGenerationError(
-        `El servicio de guiones respondió ${cause.status}.`,
+        ours
+          ? "El servicio de guiones no está disponible ahora mismo. Inténtalo más tarde; no se te cobraron los minutos."
+          : `El servicio de guiones respondió ${cause.status}.`,
         cause,
       );
     }
@@ -113,7 +125,9 @@ async function ask(
   // Structured outputs got the shape right; this fixes the meaning.
   return parseStoryboard(response.parsed_output, {
     fallbackTitle: request.documentName,
-    allowedSeconds: request.allowedSeconds,
+    // The same ceiling the menu was cut to, so a storyboard whose scenes add
+    // up to more than it was offered gets clamped rather than believed.
+    allowedSeconds: ceilingFor(request),
   });
 }
 

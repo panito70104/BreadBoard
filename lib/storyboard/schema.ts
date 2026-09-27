@@ -62,9 +62,12 @@ export const LIMITS = {
   sketchLabelChars: 24,
   captionChars: 60,
   /**
-   * How fast the voice actually reads, measured: 2.57 words a second in
-   * Spanish on `eleven_multilingual_v2` at its default pace. Used to guess how
-   * long a scene will run before it has been spoken.
+   * How fast the voice actually reads, measured on a real scene's narration:
+   * 2.59 words a second in Spanish on `eleven_multilingual_v2`, 2.68 on Turbo
+   * v2.5, 2.64 on Flash v2.5 — close enough that the model can be swapped
+   * without touching this. Kept a hair low on purpose: a narration that comes
+   * out short is padded with drawing time for free, while a long one has to be
+   * read faster.
    */
   wordsPerSecond: 2.57,
   /**
@@ -339,6 +342,34 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 export const DEFAULT_LANGUAGE = "es";
+
+/**
+ * The longest video this much source material can honestly fill.
+ *
+ * Asking the model to pick a short length for a thin document does not work —
+ * told twice, in two different ways, it still gave ninety seconds to eighteen
+ * words. It seems to reason about how long a video ought to be rather than how
+ * much there is to say, and no amount of wording moves that.
+ *
+ * So the menu it chooses from is cut to size instead. A video is a summary, so
+ * a document has to carry more raw material than the narration it produces —
+ * past some ratio the video is not summarising any more, it is inventing.
+ *
+ * The ratio is deliberately loose. Asked to go deep, the model will happily
+ * write four hundred words of narration from eighty of source, and capping
+ * that hard would also cap the case where a student asks for depth on a dense
+ * page and is right to. One and a half times leaves that room while still
+ * catching the case this exists for: a handful of sentences given a minute and
+ * a half of video, which can only be padding.
+ *
+ * Only ever a ceiling. The student asking for something short still wins.
+ */
+const SOURCE_TO_NARRATION = 1.5;
+
+export function materialCeilingSeconds(documentWords: number): number {
+  const seconds = documentWords / (LIMITS.wordBudgetPerSecond * SOURCE_TO_NARRATION);
+  return Math.max(LIMITS.minVideoSeconds, Math.round(seconds));
+}
 
 export function normalizeLanguage(value: unknown): string {
   const raw = typeof value === "string" ? value.trim() : "";

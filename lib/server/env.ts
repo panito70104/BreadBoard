@@ -36,8 +36,14 @@ const schema = z.object({
    * is the only thing needed to turn the voice on.
    */
   ELEVENLABS_API_KEY: z.string().optional().transform((value) => value || undefined),
-  /** Quality first. `eleven_turbo_v2_5` and `eleven_flash_v2_5` are cheaper and faster. */
-  ELEVENLABS_MODEL_ID: z.string().default("eleven_multilingual_v2"),
+  /**
+   * Turbo v2.5: half the price of `eleven_multilingual_v2` ($0.05 vs $0.10 per
+   * thousand characters) and, measured on a real scene's narration, the same
+   * speaking rate — 2.68 words a second against 2.59 — so nothing downstream
+   * needs recalibrating. Voice goes from ~41% of what a video costs to ~23%.
+   * `eleven_flash_v2_5` is the same price again, tuned for latency over fidelity.
+   */
+  ELEVENLABS_MODEL_ID: z.string().default("eleven_turbo_v2_5"),
   /** Pins one voice. Left empty, a voice is picked from the account per language. */
   ELEVENLABS_VOICE_ID: z.string().optional().transform((value) => value || undefined),
 });

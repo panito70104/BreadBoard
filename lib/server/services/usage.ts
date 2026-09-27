@@ -8,6 +8,13 @@
  *
  * A failed generation is refunded with a negative row, so the ledger always
  * adds up and the history shows what happened.
+ *
+ * Minutes are not the only meter. Every generation costs a model call and a
+ * voice call whatever it produces, so a plan metered only in minutes can be
+ * spent one short video at a time — thirty one-minute videos cost far more to
+ * serve than ten three-minute ones for the same thirty minutes. Paid plans are
+ * priced with that headroom; the free one is not, so its generations are
+ * counted too.
  */
 
 import "server-only";
@@ -40,12 +47,36 @@ export async function minutesUsed(
   return Math.max(0, row?.total ?? 0);
 }
 
+/** Generations started this period. Restarts count: each one costs again. */
+export async function generationsUsed(
+  ownerId: string,
+  period: BillingPeriod = currentBillingPeriod(),
+  executor: Executor = db(),
+): Promise<number> {
+  const [row] = await executor
+    .select({ total: sql<number>`count(*)::int` })
+    .from(schema.usageEvents)
+    .where(
+      and(
+        eq(schema.usageEvents.ownerId, ownerId),
+        eq(schema.usageEvents.reason, "generation"),
+        gte(schema.usageEvents.createdAt, period.start),
+        lt(schema.usageEvents.createdAt, period.end),
+      ),
+    );
+  return Math.max(0, row?.total ?? 0);
+}
+
 export interface UsageSummary {
   planId: PlanId;
   minutesUsed: number;
   minutesLimit: number;
   minutesRemaining: number;
   maxVideoMinutes: number;
+  /** Null on the plans that only meter minutes. */
+  videosLimit: number | null;
+  videosUsed: number;
+  videosRemaining: number | null;
   periodStart: string;
   periodEnd: string;
 }
@@ -53,13 +84,21 @@ export interface UsageSummary {
 export async function usageSummary(ownerId: string, planId: PlanId): Promise<UsageSummary> {
   const plan = getPlan(planId);
   const period = currentBillingPeriod();
-  const used = await minutesUsed(ownerId, period);
+  const [used, videos] = await Promise.all([
+    minutesUsed(ownerId, period),
+    plan.videosPerMonth === null ? Promise.resolve(0) : generationsUsed(ownerId, period),
+  ]);
+
   return {
     planId,
     minutesUsed: used,
     minutesLimit: plan.minutesPerMonth,
     minutesRemaining: Math.max(0, plan.minutesPerMonth - used),
     maxVideoMinutes: plan.maxDurationMinutes,
+    videosLimit: plan.videosPerMonth,
+    videosUsed: videos,
+    videosRemaining:
+      plan.videosPerMonth === null ? null : Math.max(0, plan.videosPerMonth - videos),
     periodStart: period.start.toISOString(),
     periodEnd: period.end.toISOString(),
   };
@@ -80,7 +119,20 @@ export async function reserveMinutes(
     .for("update");
 
   const plan = getPlan(profile?.planId ?? "free");
-  const used = await minutesUsed(ownerId, currentBillingPeriod(), tx);
+  const period = currentBillingPeriod();
+
+  if (plan.videosPerMonth !== null) {
+    const videos = await generationsUsed(ownerId, period, tx);
+    if (videos >= plan.videosPerMonth) {
+      throw paymentRequired(
+        plan.videosPerMonth === 1
+          ? `El plan ${plan.name} incluye un video al mes y ya lo usaste. Sube de plan para seguir generando.`
+          : `Ya generaste los ${plan.videosPerMonth} videos que incluye el plan ${plan.name} este mes.`,
+      );
+    }
+  }
+
+  const used = await minutesUsed(ownerId, period, tx);
   const remaining = plan.minutesPerMonth - used;
 
   if (minutes > remaining) {
@@ -122,14 +174,17 @@ export async function settleMinutes({
   reserved: number;
   actual: number;
 }) {
-  const difference = actual - reserved;
-  if (difference === 0) return;
+  // Never more than was held. The student was told what the video could cost
+  // before it started, and a second `generation` row would also make this look
+  // like a second generation to the counter above.
+  const charged = Math.min(reserved, actual);
+  if (charged >= reserved) return;
 
   await db().insert(schema.usageEvents).values({
     ownerId,
     videoId,
-    minutes: difference,
-    reason: difference < 0 ? "refund" : "generation",
+    minutes: charged - reserved,
+    reason: "refund",
   });
 }
 

@@ -88,6 +88,28 @@ function holdFor(usage: UsageSummary): number {
   return Math.min(usage.maxVideoMinutes, usage.minutesRemaining);
 }
 
+/**
+ * Everything the plan can refuse, checked before a file is stored.
+ *
+ * The authoritative version runs under a lock inside `reserveMinutes`; this is
+ * the cheap one, so a student out of quota is told immediately instead of
+ * after their textbook has been uploaded.
+ */
+function assertCanGenerate(usage: UsageSummary) {
+  if (usage.videosRemaining !== null && usage.videosRemaining < 1) {
+    throw paymentRequired(
+      usage.videosLimit === 1
+        ? "Tu plan incluye un video al mes y ya lo usaste. Sube de plan para seguir generando."
+        : `Ya generaste los ${usage.videosLimit} videos de este mes.`,
+    );
+  }
+  if (holdFor(usage) < 1) {
+    throw paymentRequired(
+      `Ya usaste tus ${usage.minutesLimit} minutos de este mes. Sube de plan o espera al próximo ciclo.`,
+    );
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                  Start                                     */
 /* -------------------------------------------------------------------------- */
@@ -105,13 +127,9 @@ export async function startGeneration(user: AuthUser, form: FormData): Promise<V
   validateUpload(file);
 
   const usage = await usageSummary(user.id, user.planId);
-  const hold = holdFor(usage);
-  if (hold < 1) {
-    throw paymentRequired(
-      `Ya usaste tus ${usage.minutesLimit} minutos de este mes. Sube de plan o espera al próximo ciclo.`,
-    );
-  }
+  assertCanGenerate(usage);
 
+  const hold = holdFor(usage);
   const document = await createDocument(user.id, file);
 
   try {
@@ -156,12 +174,8 @@ export async function restartGeneration(user: AuthUser, videoId: string): Promis
     throw conflict("El documento original ya no existe. Súbelo de nuevo.", "document_missing");
   }
   const usage = await usageSummary(user.id, user.planId);
+  assertCanGenerate(usage);
   const hold = holdFor(usage);
-  if (hold < 1) {
-    throw paymentRequired(
-      `Ya usaste tus ${usage.minutesLimit} minutos de este mes. Sube de plan o espera al próximo ciclo.`,
-    );
-  }
 
   await db().transaction(async (tx) => {
     await tx
@@ -256,7 +270,10 @@ export async function runGeneration(videoId: string): Promise<void> {
 
     // What the video actually came out at, which is what it costs. The rest of
     // the hold goes back.
-    const chargedMinutes = Math.max(1, Math.ceil(storyboard.totalSeconds / 60));
+    const chargedMinutes = Math.min(
+      video.requestedMinutes,
+      Math.max(1, Math.ceil(storyboard.totalSeconds / 60)),
+    );
     await settleMinutes({
       ownerId: video.ownerId,
       videoId: video.id,

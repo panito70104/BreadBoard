@@ -172,7 +172,10 @@ export function GenerationPanel() {
   /* ------------------------------- Working -------------------------------- */
 
   const isWorking = phase === "uploading" || phase === "processing";
-  const exhausted = remaining <= 0;
+  // A plan can run out two ways: out of minutes, or out of videos.
+  const videosLeft = usage?.videosRemaining ?? null;
+  const outOfVideos = videosLeft !== null && videosLeft < 1;
+  const exhausted = remaining <= 0 || outOfVideos;
 
   return (
     <div className="space-y-5">
@@ -244,7 +247,11 @@ export function GenerationPanel() {
             <p className="text-xs text-slate-500">
               {exhausted ? (
                 <>
-                  Usaste todos tus minutos de este mes.{" "}
+                  {outOfVideos
+                    ? usage?.videosLimit === 1
+                      ? "Tu plan incluye un video al mes y ya lo usaste."
+                      : `Ya generaste los ${usage?.videosLimit} videos de este mes.`
+                    : "Usaste todos tus minutos de este mes."}{" "}
                   <Link href="/billing" className="font-medium text-brand-600">
                     Sube de plan
                   </Link>
@@ -254,6 +261,12 @@ export function GenerationPanel() {
                   La duración la decide tu documento y lo que pidas. Como mucho
                   usará {mostItCanCost} de tus {remaining} min restantes; si sale
                   más corto, se te cobra menos.
+                  {videosLeft !== null && (
+                    <>
+                      {" "}
+                      Te queda {videosLeft === 1 ? "1 video" : `${videosLeft} videos`} este mes.
+                    </>
+                  )}
                 </>
               ) : (
                 <>Sube un documento para activar la generación.</>
