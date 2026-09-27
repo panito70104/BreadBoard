@@ -1,42 +1,29 @@
 "use client";
 
 /**
- * Renders one planned step: its parts, each at its own share of the step's
- * progress. All the geometry was decided by the planner — this file only
- * paints it — so the ink and the hand can never disagree.
+ * Renders one planned step.
+ *
+ * All the geometry was decided by the planner and all the timing by the pen
+ * schedule — this file only paints what they worked out, so the ink and the
+ * hand can never disagree. A step with no `slices` is one that finished drawing
+ * some time ago: everything it owns is simply complete.
  */
 
 import { HAND_FONT, type BoardTheme } from "@/lib/engine/board";
-import { headOf, partProgress } from "@/lib/engine/parts";
 import type { PlacedStep } from "@/lib/engine/plan";
 import type { MarkColor } from "@/types/storyboard";
 
 import { DrawnPaths } from "./drawn-paths";
 import { DrawnText } from "./drawn-text";
 
-/** Board coordinates of the tool tip, or null when nothing is being drawn. */
-export function elementHead(placed: PlacedStep, progress: number) {
-  if (placed.element.type === "erase") {
-    const { x, y, w, h } = placed.bounds;
-    // The eraser sweeps side to side down the area it clears.
-    const rows = 3;
-    const row = Math.min(rows - 1, Math.floor(progress * rows));
-    const along = (progress * rows) % 1;
-    return {
-      x: x + w * (row % 2 === 0 ? along : 1 - along),
-      y: y + (h * (row + 0.5)) / rows,
-    };
-  }
-  return headOf(placed.parts, placed.windows, progress);
-}
-
 export function DrawElementView({
   placed,
-  progress,
+  slices,
   theme,
 }: {
   placed: PlacedStep;
-  progress: number;
+  /** Per part, how much of each path or word is inked. Omit when fully drawn. */
+  slices?: number[][];
   theme: BoardTheme;
 }) {
   const { element } = placed;
@@ -52,8 +39,9 @@ export function DrawElementView({
   return (
     <>
       {placed.parts.map((part, index) => {
-        const p = partProgress(placed.windows[index], progress);
-        if (p <= 0) return null;
+        const share = slices?.[index];
+        // No share array at all means the step is behind us and fully inked.
+        if (share && share.every((value) => value <= 0)) return null;
 
         if (part.kind === "text") {
           return (
@@ -65,7 +53,7 @@ export function DrawElementView({
               fontSize={part.fontSize}
               fontFamily={HAND_FONT}
               color={colorOf(part.color)}
-              progress={p}
+              wordProgress={share ?? part.layout.words.map(() => 1)}
             />
           );
         }
@@ -77,7 +65,7 @@ export function DrawElementView({
           >
             <DrawnPaths
               paths={part.paths}
-              progress={p}
+              shares={share ?? part.paths.map(() => 1)}
               color={colorOf(part.color)}
               strokeWidth={part.strokeWidth}
               viewBox={`0 0 ${part.viewBox.w} ${part.viewBox.h}`}

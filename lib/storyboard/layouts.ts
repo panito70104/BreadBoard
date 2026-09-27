@@ -28,7 +28,7 @@ export const LAYOUTS: Record<SceneLayout, LayoutDefinition> = {
     id: "title-bullets",
     label: "Título y viñetas",
     description:
-      "El caballo de batalla: un título arriba y de 3 a 5 viñetas debajo. Úsalo cuando no haya un visual claro.",
+      "Último recurso: un título y unas pocas viñetas, sin nada dibujado. Casi siempre significa que no buscaste lo suficiente cómo dibujar la idea. Si lo eliges, que sea porque el contenido es una lista de verdad.",
     slots: {
       title: { x: 0.08, y: 0.1, w: 0.84, h: 0.14 },
       list: { x: 0.12, y: 0.3, w: 0.76, h: 0.55 },
@@ -41,7 +41,7 @@ export const LAYOUTS: Record<SceneLayout, LayoutDefinition> = {
     id: "visual-left-bullets-right",
     label: "Visual e ideas",
     description:
-      "Un dibujo o diagrama a la izquierda y las ideas a la derecha. El más rico visualmente: prefiérelo siempre que el concepto se pueda dibujar.",
+      "El layout por defecto: un dibujo o diagrama a la izquierda y dos o tres ideas cortas a la derecha. Elígelo siempre que el concepto se pueda dibujar, que es casi siempre.",
     slots: {
       title: { x: 0.08, y: 0.08, w: 0.84, h: 0.13 },
       visual: { x: 0.07, y: 0.28, w: 0.36, h: 0.5 },
@@ -55,7 +55,7 @@ export const LAYOUTS: Record<SceneLayout, LayoutDefinition> = {
     id: "two-column-compare",
     label: "Dos columnas",
     description:
-      "Comparar dos cosas: antes/después, ventajas/desventajas, teoría A contra teoría B.",
+      "Comparar dos cosas: antes/después, ventajas/desventajas, teoría A contra teoría B. Dibuja las dos, no las describas.",
     slots: {
       title: { x: 0.08, y: 0.08, w: 0.84, h: 0.13 },
       left: { x: 0.07, y: 0.26, w: 0.4, h: 0.58 },
@@ -68,7 +68,7 @@ export const LAYOUTS: Record<SceneLayout, LayoutDefinition> = {
     id: "center-diagram-labels",
     label: "Diagrama con etiquetas",
     description:
-      "Un diagrama grande al centro con etiquetas alrededor. Para estructuras, ciclos y partes de algo.",
+      "Un diagrama grande al centro con etiquetas alrededor. El otro que hay que preferir: para estructuras, ciclos, comparaciones, tablas y partes de algo. Si el dibujo es lo importante, va aquí.",
     slots: {
       title: { x: 0.08, y: 0.07, w: 0.84, h: 0.12 },
       center: { x: 0.22, y: 0.24, w: 0.54, h: 0.54 },
@@ -108,7 +108,7 @@ export const LAYOUTS: Record<SceneLayout, LayoutDefinition> = {
     id: "summary-box",
     label: "Resumen enmarcado",
     description:
-      "El cierre: las ideas que hay que recordar, dentro de un recuadro dibujado a mano.",
+      "El cierre: lo que hay que recordar, dentro de un recuadro dibujado a mano. Aun aquí, un dibujo se recuerda mejor que una frase.",
     slots: {
       title: { x: 0.08, y: 0.1, w: 0.84, h: 0.14 },
       list: { x: 0.16, y: 0.32, w: 0.68, h: 0.44 },
@@ -120,8 +120,14 @@ export const LAYOUTS: Record<SceneLayout, LayoutDefinition> = {
 
 export const LAYOUT_IDS = Object.keys(LAYOUTS) as SceneLayout[];
 
-/** Layout used when the model names one that does not exist. */
-export const DEFAULT_LAYOUT: SceneLayout = "title-bullets";
+/**
+ * Layout used when the model names one that does not exist.
+ *
+ * The fallback is a drawing layout on purpose: a scene that ends up here has
+ * already gone wrong somewhere, and landing it on a slot that expects a picture
+ * is a better failure than landing it on a list.
+ */
+export const DEFAULT_LAYOUT: SceneLayout = "visual-left-bullets-right";
 
 export function isSceneLayout(value: unknown): value is SceneLayout {
   return typeof value === "string" && value in LAYOUTS;
@@ -141,7 +147,13 @@ export function resolveSlot(layout: SceneLayout, slot: Slot) {
   return definition.slots[slot] ?? definition.slots[definition.fallbackSlot]!;
 }
 
-/** How many bullets fit in a slot before the text gets too small to read. */
+/**
+ * How many bullets fit in a slot before the text gets too small to read.
+ *
+ * This is the physical limit. The editorial one — three per scene, whatever
+ * fits — lives in `LIMITS.maxBulletsPerScene`, and is usually the tighter of
+ * the two.
+ */
 export function bulletCapacity(layout: SceneLayout, slot: Slot): number {
   const box = resolveSlot(layout, slot);
   // One bullet needs roughly 9% of board height including its gap.

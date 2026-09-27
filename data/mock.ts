@@ -16,7 +16,6 @@ import type {
   StoryboardScene,
   StoryboardStep,
   SubscriptionPlan,
-  VideoDurationOption,
   VideoStyleOption,
 } from "@/types";
 
@@ -212,12 +211,6 @@ export const videoStyles: VideoStyleOption[] = [
     description: "Marcadores de colores para resaltar ideas.",
     swatch: ["#ffffff", "#ef4444", "#10b981"],
   },
-];
-
-export const videoDurations: VideoDurationOption[] = [
-  { id: 1, label: "1 min", description: "Repaso exprés" },
-  { id: 3, label: "3 min", description: "Explicación completa" },
-  { id: 5, label: "5 min", description: "Tema a fondo" },
 ];
 
 /* -------------------------------------------------------------------------- */

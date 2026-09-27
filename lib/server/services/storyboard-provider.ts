@@ -46,8 +46,11 @@ export async function produceStoryboard(
 
   // The template, run through the same validator Claude's output goes through.
   const result = parseStoryboard(
-    { videoTitle: request.title, scenes: buildStoryboard(request.title.toLowerCase(), "mock") },
-    { fallbackTitle: request.title },
+    {
+      videoTitle: request.title,
+      scenes: buildStoryboard(request.title.toLowerCase(), "mock"),
+    },
+    { fallbackTitle: request.title, allowedSeconds: request.allowedSeconds },
   );
   return { result, source: "mock" };
 }

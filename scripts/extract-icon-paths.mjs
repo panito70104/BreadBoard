@@ -12,7 +12,22 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const vocabulary = readFileSync("lib/storyboard/icons.ts", "utf8");
-const ids = [...vocabulary.matchAll(/^\s+"([A-Z][A-Za-z0-9]*)",?$/gm)].map((m) => m[1]);
+
+/**
+ * Every PascalCase string literal in the vocabulary, deduplicated.
+ *
+ * This used to require one name per line, which silently skipped any group
+ * written as a single-line array — the whole `cuerpo` group was missing from
+ * the output for that reason, and an icon with no paths draws nothing at all,
+ * with no error anywhere. Formatting is Prettier's business, not ours.
+ */
+const catalog = vocabulary.slice(
+  vocabulary.indexOf("ICON_VOCABULARY = {"),
+  vocabulary.indexOf("} as const;"),
+);
+const ids = [
+  ...new Set([...catalog.matchAll(/"([A-Z][A-Za-z0-9]*)"/g)].map((m) => m[1])),
+];
 
 /**
  * Maps every exported icon name to the module that defines it, straight from

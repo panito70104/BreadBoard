@@ -3,28 +3,27 @@
 /**
  * The whiteboard composition: a storyboard, drawn.
  *
- * At any frame it shows the scene that owns the frame, everything drawn so
- * far, the step in progress, and the hand. Between steps the hand behaves like
- * a person's: over a short pause it glides, lifted, to where the next stroke
- * starts; over a long one it lingers, then leaves and comes back in time.
+ * At any frame it shows the scene that owns the frame, everything drawn so far,
+ * the step in progress, and the hand — through a camera that leans toward
+ * whatever is being drawn.
+ *
+ * Almost nothing is decided here. The planner owns the geometry, the pen
+ * schedule owns the timing, `hand-motion` owns where the hand is and the camera
+ * owns the frame; this file asks each of them once and paints the answer.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, Sequence, useCurrentFrame } from "remotion";
 
 import { Hand } from "@/components/engine/hand";
-import {
-  DrawElementView,
-  elementHead,
-} from "@/components/engine/elements/draw-element";
+import { DrawElementView } from "@/components/engine/elements/draw-element";
 import { BOARD, BOARD_THEMES } from "@/lib/engine/board";
-import { planScene, visibleSteps, type PlacedStep, type ScenePlan } from "@/lib/engine/plan";
+import { cameraAt } from "@/lib/engine/camera";
+import { endFrameOf, stageAt, type StageState } from "@/lib/engine/hand-motion";
+import { penProgress, penStateAt } from "@/lib/engine/pen";
+import { planStoryboard, visibleSteps, type PlacedStep, type ScenePlan } from "@/lib/engine/plan";
 import { clearTextCache } from "@/lib/engine/text";
-import {
-  buildTimeline,
-  sceneAtFrame,
-  stepProgress,
-} from "@/lib/engine/timeline";
+import { buildTimeline, sceneAtFrame } from "@/lib/engine/timeline";
 import type { Storyboard } from "@/types/storyboard";
 import type { VideoStyle } from "@/types";
 
@@ -33,11 +32,15 @@ export interface WhiteboardCompositionProps {
   style: VideoStyle;
   /** Which hand family draws. */
   handFamily?: number;
+  /**
+   * Where to fetch each scene's voice-over, by scene id.
+   *
+   * The drawing is already synchronised to it — every step carries the second
+   * its phrase is spoken — so all this has to do is play the file over the
+   * frames the scene occupies. A scene with no entry plays silent.
+   */
+  audioUrls?: Record<string, string>;
 }
-
-const GLIDE_MAX = BOARD.fps * 1.6;
-const LINGER = BOARD.fps * 0.5;
-const FADE = BOARD.fps * 0.25;
 
 /** Faint ruling under the content, per style. */
 function BoardSurface({ color }: { color: string | null }) {
@@ -52,65 +55,29 @@ function BoardSurface({ color }: { color: string | null }) {
   );
 }
 
-const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
-const endOf = (step: PlacedStep) => step.timed.from + step.timed.durationInFrames;
-
-interface HandState {
-  x: number;
-  y: number;
-  opacity: number;
-  tool: "marker" | "eraser";
-}
-
-function handAt(frame: number, plan: ScenePlan): HandState | null {
-  const steps = plan.steps.filter((step) => step.parts.length || step.element.type === "erase");
-  const tool = (step: PlacedStep) => (step.element.type === "erase" ? "eraser" : "marker");
-
-  const active = steps.find((step) => frame >= step.timed.from && frame < endOf(step));
-  if (active) {
-    const head = elementHead(active, stepProgress(frame, active.timed));
-    return head ? { ...head, opacity: 1, tool: tool(active) } : null;
-  }
-
-  const previous = [...steps].reverse().find((step) => endOf(step) <= frame);
-  const next = steps.find((step) => step.timed.from > frame);
-  const from = previous ? elementHead(previous, 1) : null;
-  const to = next ? elementHead(next, 0) : null;
-
-  // Short pause: glide to the next stroke, lifted slightly off the board.
-  if (previous && next && from && to && next.timed.from - endOf(previous) <= GLIDE_MAX) {
-    const t = ease((frame - endOf(previous)) / (next.timed.from - endOf(previous)));
-    return {
-      x: from.x + (to.x - from.x) * t,
-      y: from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * 14,
-      opacity: 1,
-      tool: tool(next),
-    };
-  }
-
-  // Long pause: stay a moment after finishing, then fade out…
-  if (previous && from) {
-    const since = frame - endOf(previous);
-    if (since < LINGER + FADE) {
-      return {
-        ...from,
-        opacity: since < LINGER ? 1 : 1 - (since - LINGER) / FADE,
-        tool: tool(previous),
-      };
-    }
-  }
-  // …and fade back in just before the next stroke.
-  if (next && to) {
-    const until = next.timed.from - frame;
-    if (until < FADE) return { ...to, opacity: 1 - until / FADE, tool: tool(next) };
-  }
-  return null;
+/**
+ * How much of a visible step is inked.
+ *
+ * `undefined` means finished, which is the common case and costs nothing. A
+ * step still drawing gets its own share — normally the active one, whose state
+ * the stage already worked out, but a crowded scene can start a step while the
+ * previous one is finishing, and drawing that one complete from its first frame
+ * would pop the whole thing onto the board at once.
+ */
+function slicesFor(placed: PlacedStep, stage: StageState, frame: number) {
+  if (frame >= endFrameOf(placed, BOARD.fps)) return undefined;
+  if (placed === stage.active) return stage.pen?.slices ?? undefined;
+  return penStateAt(
+    placed.pen,
+    penProgress(frame, placed.timed, placed.pen, BOARD.fps),
+  ).slices;
 }
 
 export function WhiteboardComposition({
   storyboard,
   style,
   handFamily,
+  audioUrls,
 }: WhiteboardCompositionProps) {
   const frame = useCurrentFrame();
   const theme = BOARD_THEMES[style];
@@ -132,39 +99,71 @@ export function WhiteboardComposition({
     };
   }, []);
 
-  const timeline = useMemo(() => buildTimeline(storyboard), [storyboard]);
-  const plans = useMemo(
-    () => timeline.scenes.map(planScene),
-    // fontsReady is a dependency on purpose: it invalidates the measurements.
+  const { timeline, plans } = useMemo(
+    () => planStoryboard(storyboard),
+    // fontsReady is a dependency on purpose: it invalidates the measurements,
+    // and with them every stroke length the pacing was worked out from.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timeline, fontsReady],
+    [storyboard, fontsReady],
   );
 
   const scene = sceneAtFrame(frame, timeline);
-  const plan = scene ? plans[timeline.scenes.indexOf(scene)] : null;
+  const plan: ScenePlan | null = scene ? plans[timeline.scenes.indexOf(scene)] : null;
 
   if (!scene || !plan) {
     return <AbsoluteFill style={{ backgroundColor: theme.background }} />;
   }
 
-  const hand = handAt(frame, plan);
+  const stage = stageAt(frame, plan, BOARD.fps);
+  const camera = cameraAt(plan.camera, frame, BOARD.fps);
 
   return (
     <AbsoluteFill style={{ backgroundColor: theme.background, overflow: "hidden" }}>
-      <BoardSurface color={theme.grid} />
+      {/* Outside the camera transform: sound has no position on the board. */}
+      {timeline.scenes.map((timed) => {
+        const src = audioUrls?.[timed.scene.id];
+        if (!src) return null;
+        return (
+          <Sequence
+            key={`voz-${timed.scene.id}`}
+            from={timed.from}
+            durationInFrames={timed.durationInFrames}
+          >
+            <Audio src={src} />
+          </Sequence>
+        );
+      })}
 
-      {visibleSteps(plan, frame).map((placed) => (
-        <DrawElementView
-          key={`${scene.scene.id}-${placed.timed.index}`}
-          placed={placed}
-          progress={stepProgress(frame, placed.timed)}
-          theme={theme}
-        />
-      ))}
+      <AbsoluteFill
+        style={{
+          transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+          transformOrigin: "0 0",
+        }}
+      >
+        <BoardSurface color={theme.grid} />
 
-      {hand && (
-        <Hand x={hand.x} y={hand.y} tool={hand.tool} family={handFamily} opacity={hand.opacity} />
-      )}
+        {visibleSteps(plan, frame).map((placed) => (
+          <DrawElementView
+            key={`${scene.scene.id}-${placed.timed.index}`}
+            placed={placed}
+            slices={slicesFor(placed, stage, frame)}
+            theme={theme}
+          />
+        ))}
+
+        {stage.hand && (
+          <Hand
+            x={stage.hand.x}
+            y={stage.hand.y}
+            angle={stage.hand.angle}
+            lift={stage.hand.lift}
+            speed={stage.hand.speed}
+            frame={frame}
+            tool={stage.hand.tool}
+            family={handFamily}
+          />
+        )}
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 }

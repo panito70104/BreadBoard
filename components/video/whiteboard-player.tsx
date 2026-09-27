@@ -28,6 +28,9 @@ import type { Video } from "@/types";
 function toStoryboard(video: Video): Storyboard {
   return {
     videoTitle: video.title,
+    language: video.language ?? "es",
+    // The length it was written for; the player only needs what it became.
+    targetSeconds: video.durationSeconds,
     scenes: video.storyboard,
     totalSeconds: video.storyboard.reduce(
       (total, scene) => total + scene.durationSeconds,
@@ -99,7 +102,7 @@ export function WhiteboardPlayer({ video }: { video: Video }) {
         <Player
           ref={playerRef}
           component={WhiteboardComposition}
-          inputProps={{ storyboard, style: video.style }}
+          inputProps={{ storyboard, style: video.style, audioUrls: video.audioUrls }}
           durationInFrames={durationInFrames}
           fps={fps}
           compositionWidth={BOARD_DIMENSIONS.width}

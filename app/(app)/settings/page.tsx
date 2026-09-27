@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Check, CircleAlert } from "lucide-react";
 
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
-import { DurationSelector } from "@/components/upload/duration-selector";
 import { StyleSelector } from "@/components/upload/style-selector";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import { FieldHint, Input, Label } from "@/components/ui/field";
 import { getServiceStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
-import type { ServiceStatus, VideoDurationMinutes, VideoStyle } from "@/types";
+import type { ServiceStatus, VideoStyle } from "@/types";
 
 type IntegrationState = "active" | "example" | "pending";
 
@@ -35,11 +34,9 @@ export default function SettingsPage() {
   /** Draft edits only; untouched fields read straight from the account. */
   const [draftName, setDraftName] = useState<string | null>(null);
   const [draftStyle, setDraftStyle] = useState<VideoStyle | null>(null);
-  const [draftDuration, setDraftDuration] = useState<VideoDurationMinutes | null>(null);
 
   const name = draftName ?? user?.name ?? "";
   const style = draftStyle ?? user?.preferences?.defaultStyle ?? "classic-whiteboard";
-  const duration = draftDuration ?? user?.preferences?.defaultDurationMinutes ?? 1;
 
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -58,7 +55,7 @@ export default function SettingsPage() {
     };
   }, []);
 
-  const isDirty = draftName !== null || draftStyle !== null || draftDuration !== null;
+  const isDirty = draftName !== null || draftStyle !== null;
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,12 +65,10 @@ export default function SettingsPage() {
       await updateProfile({
         ...(draftName !== null && { name: draftName }),
         ...(draftStyle !== null && { defaultStyle: draftStyle }),
-        ...(draftDuration !== null && { defaultDurationMinutes: draftDuration }),
       });
       setDraftName(null);
       setDraftStyle(null);
-      setDraftDuration(null);
-      setSaved(true);
+        setSaved(true);
       window.setTimeout(() => setSaved(false), 2400);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No pudimos guardar los cambios.");
@@ -159,11 +154,6 @@ export default function SettingsPage() {
           </div>
 
           <StyleSelector value={style} onChange={setDraftStyle} />
-          <DurationSelector
-            value={duration}
-            onChange={setDraftDuration}
-            maxMinutes={user?.usage?.maxVideoMinutes}
-          />
         </Card>
 
         {error && (

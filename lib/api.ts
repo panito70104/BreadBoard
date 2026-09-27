@@ -18,7 +18,6 @@ import type {
   User,
   UserPreferences,
   Video,
-  VideoDurationMinutes,
   VideoStyle,
 } from "@/types";
 
@@ -157,7 +156,11 @@ export function documentDownloadUrl(documentId: string) {
 
 export interface GenerationOptions {
   style: VideoStyle;
-  durationMinutes: VideoDurationMinutes;
+  /**
+   * What the student asked for, in their own words. It steers the length as
+   * well as the content: "algo corto" produces a shorter video than the same
+   * document with no instructions.
+   */
   prompt?: string;
 }
 
@@ -208,7 +211,6 @@ export function startGeneration(
     const body = new FormData();
     body.set("file", file);
     body.set("style", options.style);
-    body.set("durationMinutes", String(options.durationMinutes));
     if (options.prompt) body.set("prompt", options.prompt);
     xhr.send(body);
   });
@@ -230,6 +232,7 @@ const STAGE_TO_STEP: Record<GenerationStage, GenerationStepId> = {
   queued: "reading",
   reading: "reading",
   storyboarding: "storyboarding",
+  voicing: "rendering",
   finalizing: "rendering",
   done: "ready",
 };

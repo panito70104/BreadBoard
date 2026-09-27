@@ -2,12 +2,13 @@
  * Diagrams, built from nothing but their labels.
  *
  * The model only says `{ kind: "axes", labels: [...] }`; everything else —
- * curves, boxes, arrows, and where each label is written — is decided here, as
- * a sequence of parts in the order a person would draw them.
+ * curves, boxes, bars, rules, and where each label is written — is decided here,
+ * as a sequence of parts in the order a person would draw them.
  */
 
 import { HAND_FONT, type Box } from "@/lib/engine/board";
-import { boardStrokes, type Part, type TextPart } from "@/lib/engine/parts";
+import { centredLabel, textPart } from "@/lib/engine/labels";
+import { boardStrokes, type Part } from "@/lib/engine/parts";
 import {
   roughArrowhead,
   roughLine,
@@ -22,51 +23,6 @@ import type { DiagramElement, MarkColor } from "@/types/storyboard";
 const SERIES_COLORS: MarkColor[] = ["blue", "green", "red", "amber", "brand"];
 
 type Point = [number, number];
-
-function text(
-  value: string,
-  x: number,
-  y: number,
-  fontSize: number,
-  maxWidth: number,
-  color?: MarkColor,
-): TextPart {
-  const layout = layoutText(value, { fontSize, fontFamily: HAND_FONT, maxWidth });
-  return { kind: "text", text: value, layout, x, y, fontSize, color };
-}
-
-/** Largest font (down to 18px) at which the label fits the box. */
-function fitted(value: string, maxWidth: number, maxHeight: number, start: number) {
-  let fontSize = start;
-  let layout = layoutText(value, { fontSize, fontFamily: HAND_FONT, maxWidth });
-  while ((layout.height > maxHeight || layout.width > maxWidth) && fontSize > 18) {
-    fontSize = Math.max(18, fontSize * 0.9);
-    layout = layoutText(value, { fontSize, fontFamily: HAND_FONT, maxWidth });
-  }
-  return { fontSize, layout };
-}
-
-/** A label centred on (cx, top), shrunk to fit its width and height. */
-function centredLabel(
-  value: string,
-  cx: number,
-  top: number,
-  maxWidth: number,
-  maxHeight: number,
-  start: number,
-  color?: MarkColor,
-): TextPart {
-  const { fontSize, layout } = fitted(value, maxWidth, maxHeight, start);
-  return {
-    kind: "text",
-    text: value,
-    layout,
-    x: cx - layout.width / 2,
-    y: top + (maxHeight - layout.height) / 2,
-    fontSize,
-    color,
-  };
-}
 
 function axes(labels: string[], box: Box, scale: number): Part[] {
   const [yName = "", xName = "", ...series] = labels;
@@ -86,9 +42,9 @@ function axes(labels: string[], box: Box, scale: number): Part[] {
       ...roughArrowhead([right, oy], [ox, oy], 18),
     ]),
   ];
-  if (yName) parts.push(text(yName, ox - 6, box.y, fontSize, box.w * 0.6));
+  if (yName) parts.push(textPart(yName, ox - 6, box.y, fontSize, box.w * 0.6));
   if (xName) {
-    const label = text(xName, 0, oy + 8, fontSize, box.w * 0.6);
+    const label = textPart(xName, 0, oy + 8, fontSize, box.w * 0.6);
     label.x = right - label.layout.width;
     parts.push(label);
   }
@@ -120,7 +76,7 @@ function axes(labels: string[], box: Box, scale: number): Part[] {
     const color = SERIES_COLORS[index % SERIES_COLORS.length];
 
     parts.push(boardStrokes(roughQuadratic(from, control, to, { bowing: 0.6 }), 6, color));
-    const label = text(name, to[0] + 10, 0, fontSize, box.x + box.w - to[0] + 40, color);
+    const label = textPart(name, to[0] + 10, 0, fontSize, box.x + box.w - to[0] + 40, color);
     label.y = falling ? to[1] - label.layout.height * 0.9 : to[1] - label.layout.height * 0.4;
     // Not enough room on the right: write it to the left of the curve's end.
     if (label.x + label.layout.width > box.x + box.w + 30) {
@@ -128,6 +84,111 @@ function axes(labels: string[], box: Box, scale: number): Part[] {
     }
     parts.push(label);
   });
+
+  return parts;
+}
+
+/**
+ * Bars. The most honest picture of "this one is bigger than that one", and the
+ * one a child reads without being taught how.
+ *
+ * Without numbers the bars are stepped evenly: the drawing still says which is
+ * larger, which is usually the whole point, without inventing quantities.
+ */
+function bars(labels: string[], values: number[] | undefined, box: Box, scale: number): Part[] {
+  const fontSize = Math.max(22, 32 * scale);
+  const ox = box.x + 20;
+  const right = box.x + box.w - 12;
+  const oy = box.y + box.h - fontSize * 2.1;
+  const top = box.y + 14;
+
+  const heights = labels.map((_, index) =>
+    values?.[index] !== undefined && Number.isFinite(values[index]) && values[index] > 0
+      ? values[index]
+      : index + 1,
+  );
+  const tallest = Math.max(...heights, 1);
+
+  const parts: Part[] = [
+    boardStrokes(roughPolyline([[ox, top], [ox, oy], [right, oy]], { bowing: 0.8 })),
+  ];
+
+  const slot = (right - ox) / labels.length;
+  const width = slot * 0.56;
+
+  labels.forEach((label, index) => {
+    const height = Math.max(26, ((oy - top) * 0.92 * heights[index]) / tallest);
+    const x = ox + slot * index + (slot - width) / 2;
+    const color = SERIES_COLORS[index % SERIES_COLORS.length];
+
+    parts.push(boardStrokes(roughRect(x, oy - height, width, height), 5, color));
+    parts.push(
+      centredLabel(label, x + width / 2, oy + 10, slot - 8, fontSize * 2, fontSize),
+    );
+  });
+
+  return parts;
+}
+
+/**
+ * A table, drawn the way one gets drawn: the headings first, the rule under
+ * them, the dividers, and then the cells filled in row by row.
+ */
+function table(labels: string[], columns: number, box: Box, scale: number): Part[] {
+  const cols = Math.max(2, Math.min(4, Math.round(columns) || 2));
+  const rows = Math.max(1, Math.ceil(labels.length / cols));
+  const cellW = box.w / cols;
+  const cellH = Math.min(box.h / rows, Math.max(74, box.h * 0.32));
+  const height = cellH * rows;
+  const fontSize = Math.max(22, 34 * scale);
+
+  const cellX = (col: number) => box.x + col * cellW;
+  const rowY = (row: number) => box.y + row * cellH;
+  const at = (row: number, col: number) => labels[row * cols + col];
+
+  const parts: Part[] = [];
+
+  // The headings, then the rule that makes them headings.
+  for (let col = 0; col < cols; col += 1) {
+    const heading = at(0, col);
+    if (heading) {
+      parts.push(
+        centredLabel(heading, cellX(col) + cellW / 2, rowY(0), cellW - 22, cellH, fontSize),
+      );
+    }
+  }
+  parts.push(
+    boardStrokes(
+      roughLine(box.x, rowY(1), box.x + box.w, rowY(1), { bowing: 1.6 }),
+      6,
+    ),
+  );
+
+  for (let col = 1; col < cols; col += 1) {
+    parts.push(
+      boardStrokes(
+        roughLine(cellX(col), box.y + 6, cellX(col), box.y + height, { bowing: 1.4 }),
+        5,
+      ),
+    );
+  }
+
+  for (let row = 1; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const value = at(row, col);
+      if (!value) continue;
+      parts.push(
+        centredLabel(
+          value,
+          cellX(col) + cellW / 2,
+          rowY(row),
+          cellW - 22,
+          cellH,
+          fontSize * 0.92,
+        ),
+      );
+    }
+  }
 
   return parts;
 }
@@ -217,6 +278,10 @@ export function diagramParts(element: DiagramElement, box: Box, scale: number): 
   switch (element.kind) {
     case "axes":
       return axes(element.labels, box, scale);
+    case "bars":
+      return bars(element.labels, element.values, box, scale);
+    case "table":
+      return table(element.labels, element.columns ?? 2, box, scale);
     case "timeline":
       return timeline(element.labels, box, scale);
     case "tree":

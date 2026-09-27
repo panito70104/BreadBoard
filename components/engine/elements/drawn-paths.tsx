@@ -6,14 +6,17 @@
  * `pathLength={1}` normalizes every path to a unit length, so one dash offset
  * value works regardless of how long the real geometry is — without it, a short
  * path and a long one drawn with the same dash array finish at different times.
+ *
+ * How far along each path is does not come from here. The pen schedule decides
+ * it, because the same numbers have to place the hand: if this file worked out
+ * its own shares, the marker would drift off its own line the moment the two
+ * disagreed about a lift or a pause.
  */
-
-import { perPathProgress } from "@/lib/engine/path-sampling";
 
 export interface DrawnPathsProps {
   paths: string[];
-  /** 0–1 through the whole set. */
-  progress: number;
+  /** How much of each path is inked, 0–1, one entry per path. */
+  shares: number[];
   color: string;
   strokeWidth: number;
   /** Viewport of the path coordinates. */
@@ -25,7 +28,7 @@ export interface DrawnPathsProps {
 
 export function DrawnPaths({
   paths,
-  progress,
+  shares,
   color,
   strokeWidth,
   viewBox,
@@ -33,8 +36,6 @@ export function DrawnPaths({
   height,
   opacity = 1,
 }: DrawnPathsProps) {
-  const shares = perPathProgress(paths, progress);
-
   return (
     <svg
       viewBox={viewBox}
@@ -49,7 +50,7 @@ export function DrawnPaths({
       aria-hidden
     >
       {paths.map((d, index) => {
-        const share = shares[index];
+        const share = shares[index] ?? 0;
         if (share <= 0) return null;
         return (
           <path

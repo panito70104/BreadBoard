@@ -46,7 +46,13 @@ import {
   produceStoryboard,
   resolveProvider,
 } from "./storyboard-provider";
-import { assertWithinPlan, refundMinutes, reserveMinutes, usageSummary } from "./usage";
+import {
+  refundMinutes,
+  reserveMinutes,
+  settleMinutes,
+  type UsageSummary,
+  usageSummary,
+} from "./usage";
 import {
   STALE_GENERATION_MS,
   getOwnedVideoRow,
@@ -54,15 +60,12 @@ import {
   setStage,
   toVideoDto,
 } from "./videos";
+import { narrate } from "./voice";
 
 export const generationOptionsSchema = z.object({
   style: z.enum(["classic-whiteboard", "paper-desk", "color-markers"], {
     message: "Estilo de video no válido.",
   }),
-  durationMinutes: z.coerce
-    .number()
-    .refine((value) => [1, 3, 5].includes(value), "La duración debe ser 1, 3 o 5 minutos.")
-    .transform((value) => value as 1 | 3 | 5),
   prompt: z
     .string()
     .trim()
@@ -70,6 +73,20 @@ export const generationOptionsSchema = z.object({
     .optional()
     .transform((value) => value || undefined),
 });
+
+/**
+ * Minutes to hold before a generation starts.
+ *
+ * The student no longer picks a length, so nobody knows what the video will
+ * cost until it exists. The hold is therefore the most it could cost — the
+ * longest video the plan allows, or whatever is left of the month if that is
+ * less — and `settleMinutes` gives back the difference once the real length is
+ * known. Holding the worst case is what keeps two tabs from spending the same
+ * last minutes twice.
+ */
+function holdFor(usage: UsageSummary): number {
+  return Math.min(usage.maxVideoMinutes, usage.minutesRemaining);
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                  Start                                     */
@@ -81,20 +98,17 @@ export async function startGeneration(user: AuthUser, form: FormData): Promise<V
 
   const options = generationOptionsSchema.parse({
     style: form.get("style") ?? "classic-whiteboard",
-    durationMinutes: form.get("durationMinutes") ?? 3,
     prompt: form.get("prompt") ?? undefined,
   });
 
   // Everything that can reject the request, before any file is stored.
   validateUpload(file);
-  assertWithinPlan(user.planId, options.durationMinutes);
 
   const usage = await usageSummary(user.id, user.planId);
-  if (usage.minutesRemaining < options.durationMinutes) {
+  const hold = holdFor(usage);
+  if (hold < 1) {
     throw paymentRequired(
-      usage.minutesRemaining === 0
-        ? `Ya usaste tus ${usage.minutesLimit} minutos de este mes. Sube de plan o espera al próximo ciclo.`
-        : `Te quedan ${usage.minutesRemaining} min este mes y este video necesita ${options.durationMinutes}. Elige una duración menor o sube de plan.`,
+      `Ya usaste tus ${usage.minutesLimit} minutos de este mes. Sube de plan o espera al próximo ciclo.`,
     );
   }
 
@@ -111,7 +125,7 @@ export async function startGeneration(user: AuthUser, form: FormData): Promise<V
           status: "generating",
           stage: "queued",
           style: options.style,
-          requestedMinutes: options.durationMinutes,
+          requestedMinutes: hold,
           prompt: options.prompt,
           source: resolveProvider(),
         })
@@ -119,11 +133,7 @@ export async function startGeneration(user: AuthUser, form: FormData): Promise<V
 
       // The authoritative quota check, under a lock. Throws (and rolls back
       // the insert above) if a parallel request took the last minutes.
-      await reserveMinutes(tx, {
-        ownerId: user.id,
-        videoId: row.id,
-        minutes: options.durationMinutes,
-      });
+      await reserveMinutes(tx, { ownerId: user.id, videoId: row.id, minutes: hold });
 
       return row;
     });
@@ -145,7 +155,13 @@ export async function restartGeneration(user: AuthUser, videoId: string): Promis
   if (!document) {
     throw conflict("El documento original ya no existe. Súbelo de nuevo.", "document_missing");
   }
-  assertWithinPlan(user.planId, video.requestedMinutes);
+  const usage = await usageSummary(user.id, user.planId);
+  const hold = holdFor(usage);
+  if (hold < 1) {
+    throw paymentRequired(
+      `Ya usaste tus ${usage.minutesLimit} minutos de este mes. Sube de plan o espera al próximo ciclo.`,
+    );
+  }
 
   await db().transaction(async (tx) => {
     await tx
@@ -155,15 +171,12 @@ export async function restartGeneration(user: AuthUser, videoId: string): Promis
         stage: "queued",
         error: null,
         notice: null,
+        requestedMinutes: hold,
         source: resolveProvider(),
       })
       .where(eq(schema.videos.id, video.id));
 
-    await reserveMinutes(tx, {
-      ownerId: user.id,
-      videoId: video.id,
-      minutes: video.requestedMinutes,
-    });
+    await reserveMinutes(tx, { ownerId: user.id, videoId: video.id, minutes: hold });
   });
 
   return getVideo(user.id, videoId);
@@ -205,29 +218,61 @@ export async function runGeneration(videoId: string): Promise<void> {
       documentText: extracted.text,
       documentName: document.name,
       prompt: video.prompt ?? undefined,
-      durationMinutes: video.requestedMinutes as 1 | 3 | 5,
+      // The model picks the length; this is only the ceiling it may pick from.
+      allowedSeconds: video.requestedMinutes * 60,
+      documentWords: extracted.text.split(/\s+/).filter(Boolean).length,
+      documentPages: extracted.pageCount,
       style: video.style as "classic-whiteboard",
       title: video.title,
     });
 
+    // Shape the plan to the length the model chose, then let the voice decide
+    // how long the scenes really are — a sentence takes as long as it takes.
+    const targetSeconds = result.storyboard.targetSeconds;
+    const planned = fitToDuration(result.storyboard, targetSeconds);
+
+    await setStage(video.id, "voicing");
+    const narration = await narrate(planned, {
+      ownerId: video.ownerId,
+      videoId: video.id,
+      targetSeconds,
+    });
+    const storyboard = narration.storyboard;
+
     await setStage(video.id, "finalizing");
-    const storyboard = fitToDuration(result.storyboard, video.requestedMinutes * 60);
 
     const notices = [
       source === "mock" ? MOCK_NOTICE : null,
+      narration.voiced === 0 && narration.warnings.length > 0
+        ? "Este video salió sin voz. Puedes volver a generarlo cuando el servicio de voz esté disponible."
+        : null,
+      narration.voiced > 0 && narration.voiced < storyboard.scenes.length
+        ? `Narramos ${narration.voiced} de ${storyboard.scenes.length} escenas; el resto quedó en silencio.`
+        : null,
       extracted.truncated
         ? `El documento tiene ${extracted.pageCount ?? "muchas"} páginas; analizamos las primeras ${extracted.pagesAnalyzed ?? "que cupieron"}. Para otro capítulo, sube solo esas páginas.`
         : null,
     ].filter(Boolean);
 
+    // What the video actually came out at, which is what it costs. The rest of
+    // the hold goes back.
+    const chargedMinutes = Math.max(1, Math.ceil(storyboard.totalSeconds / 60));
+    await settleMinutes({
+      ownerId: video.ownerId,
+      videoId: video.id,
+      reserved: video.requestedMinutes,
+      actual: chargedMinutes,
+    });
+
     await db()
       .update(schema.videos)
       .set({
         status: "ready",
+        requestedMinutes: chargedMinutes,
         stage: "done",
         title: source === "claude" && storyboard.videoTitle ? storyboard.videoTitle : video.title,
         storyboard,
-        warnings: result.warnings,
+        warnings: [...result.warnings, ...narration.warnings],
         durationSeconds: storyboard.totalSeconds,
         source,
         notice: notices.length ? notices.join(" ") : null,

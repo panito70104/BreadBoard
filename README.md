@@ -21,6 +21,12 @@ npm run dev                     # http://localhost:3000
 reinicia `npm run dev`. Sin clave todo funciona igual, pero el guion sale de una
 plantilla y la app lo avisa en pantalla.
 
+**Para que los videos hablen**, añade `ELEVENLABS_API_KEY`. No hace falta nada
+más: la voz se elige sola según el idioma del guion. Comprueba que la clave
+funciona con `npm run voices`, que lista las voces de tu cuenta; si prefieres
+una en concreto, ponla en `ELEVENLABS_VOICE_ID`. Sin clave el video se genera
+mudo y lo avisa.
+
 | Servicio           | Dirección                          |
 | ------------------ | ---------------------------------- |
 | App                | http://localhost:3000              |
@@ -38,6 +44,9 @@ plantilla y la app lo avisa en pantalla.
 | `db:generate`      | Genera una migración SQL tras cambiar `lib/server/db/schema.ts` |
 | `db:studio`        | Explorador visual de la base de datos                     |
 | `icons:extract`    | Regenera `data/icon-paths.ts` tras cambiar el vocabulario de iconos |
+| `voices`           | Lista las voces de tu cuenta de ElevenLabs (y comprueba la clave) |
+| `engine:verify`    | Corre el motor sin navegador y comprueba sus invariantes  |
+| `voice:verify`     | Comprueba el alineador de frases contra los tiempos de voz |
 | `typecheck` / `lint` / `build` | Verificación                                  |
 
 ## Arquitectura
@@ -150,6 +159,21 @@ Los minutos se renuevan el día 1 de cada mes (UTC).
   emitida tras comprobar que eres el dueño.
 - **Redirección tras login**: solo rutas internas; `?next=https://…` se ignora.
 
+## La voz
+
+El guion declara su `language` (el del documento, salvo que el estudiante pida
+otro — entonces Claude lo traduce entero). Con eso, cada escena se sintetiza en
+ElevenLabs por el endpoint `with-timestamps`, que además del mp3 devuelve el
+segundo en el que se pronuncia **cada carácter**.
+
+Ahí está el valor: cada paso del storyboard declara `on`, una frase literal de
+la narración, y `lib/server/voice/align.ts` la busca en esos tiempos para
+escribir `at` — el segundo exacto en el que cae el dibujo. Sin voz, el motor
+estima por la posición de la frase en el texto y el video sigue funcionando.
+
+La duración de una escena deja de ser una estimación y pasa a ser lo que dura
+la frase dicha, más un respiro.
+
 ## El storyboard: el contrato del motor
 
 Claude produce un JSON, el motor de Remotion lo dibuja. Dos reglas lo sostienen:
@@ -177,8 +201,8 @@ components/engine/      Composición de Remotion y la mano
 
 | Qué                       | Por qué                                            |
 | ------------------------- | -------------------------------------------------- |
-| Voz (ElevenLabs)          | Hoy el `on` se sincroniza contra el texto, no audio |
 | Exportar a MP4            | Necesita Remotion renderizando en un servidor      |
+| Elegir voz desde la app   | Hoy se elige sola por idioma; falta el selector, como el de la mano |
 | Pagos (Recurrente)        | El cambio de plan hoy es inmediato y sin cobro     |
 | Recuperar contraseña      | Necesita envío de correo — lo trae Supabase Auth   |
 | Verificar correo          | Igual, viene con Supabase Auth                     |

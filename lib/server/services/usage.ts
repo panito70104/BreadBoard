@@ -15,7 +15,7 @@ import "server-only";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 
 import { db, schema, type Executor, type Tx } from "@/lib/server/db/client";
-import { forbidden, paymentRequired } from "@/lib/server/http";
+import { paymentRequired } from "@/lib/server/http";
 import type { PlanId } from "@/types";
 
 import { currentBillingPeriod, getPlan, type BillingPeriod } from "./plans";
@@ -65,17 +65,6 @@ export async function usageSummary(ownerId: string, planId: PlanId): Promise<Usa
   };
 }
 
-/** Rejects a request the plan can never satisfy, before any work is done. */
-export function assertWithinPlan(planId: PlanId, requestedMinutes: number) {
-  const plan = getPlan(planId);
-  if (requestedMinutes > plan.maxDurationMinutes) {
-    throw forbidden(
-      `Tu plan ${plan.name} permite videos de hasta ${plan.maxDurationMinutes} min. Sube de plan para videos más largos.`,
-      "plan_duration_limit",
-    );
-  }
-}
-
 /**
  * Locks the owner's profile, checks the remaining quota and records the
  * charge. Must run inside a transaction — the lock is what makes it safe.
@@ -107,6 +96,40 @@ export async function reserveMinutes(
     videoId,
     minutes,
     reason: "generation",
+  });
+}
+
+/**
+ * Squares the reservation with the video that came out.
+ *
+ * A generation has to hold minutes before it starts — that hold is the only
+ * thing stopping two tabs spending the same last minutes — but how long the
+ * video turns out to be is not known until the model has written it and the
+ * voice has read it. So the hold is the most the request could have cost, and
+ * this gives back the difference.
+ *
+ * Written as its own signed row rather than by editing the reservation, so the
+ * ledger stays append-only and the history still shows what was held and when.
+ */
+export async function settleMinutes({
+  ownerId,
+  videoId,
+  reserved,
+  actual,
+}: {
+  ownerId: string;
+  videoId: string;
+  reserved: number;
+  actual: number;
+}) {
+  const difference = actual - reserved;
+  if (difference === 0) return;
+
+  await db().insert(schema.usageEvents).values({
+    ownerId,
+    videoId,
+    minutes: difference,
+    reason: difference < 0 ? "refund" : "generation",
   });
 }
 

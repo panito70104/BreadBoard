@@ -29,6 +29,17 @@ const schema = z.object({
 
   ANTHROPIC_API_KEY: z.string().optional().transform((value) => value || undefined),
   STORYBOARD_PROVIDER: z.enum(["auto", "claude", "mock"]).default("auto"),
+
+  /**
+   * Without a key the video is generated silently, with a notice — the same way
+   * a missing Anthropic key falls back to the sample storyboard. Adding the key
+   * is the only thing needed to turn the voice on.
+   */
+  ELEVENLABS_API_KEY: z.string().optional().transform((value) => value || undefined),
+  /** Quality first. `eleven_turbo_v2_5` and `eleven_flash_v2_5` are cheaper and faster. */
+  ELEVENLABS_MODEL_ID: z.string().default("eleven_multilingual_v2"),
+  /** Pins one voice. Left empty, a voice is picked from the account per language. */
+  ELEVENLABS_VOICE_ID: z.string().optional().transform((value) => value || undefined),
 });
 
 export type ServerEnv = z.infer<typeof schema>;

@@ -10,17 +10,19 @@
  * Within a slot, content stacks top to bottom in the order it is drawn. Text
  * takes its measured height; drawings share whatever is left. If it does not
  * fit, everything in the slot is scaled down together — never overlapped.
+ *
+ * Each step then gets a pen schedule (`pen.ts`), which is what turns geometry
+ * into a hand that draws, lifts, travels and comes back down, and a camera
+ * shot, which is what the frame follows.
  */
 
 import { ICON_PATHS, ICON_VIEWBOX } from "@/data/icon-paths";
 import { FONT_SIZE, HAND_FONT, slotBox, type Box } from "@/lib/engine/board";
+import { planCamera, type CameraKey } from "@/lib/engine/camera";
 import { diagramParts } from "@/lib/engine/diagrams";
-import {
-  boardStrokes,
-  partWindows,
-  type Part,
-  type PartWindow,
-} from "@/lib/engine/parts";
+import { boardStrokes, type Part } from "@/lib/engine/parts";
+import { orderPaths } from "@/lib/engine/path-sampling";
+import { planPen, type PenPlan } from "@/lib/engine/pen";
 import {
   roughArrowhead,
   roughEllipse,
@@ -30,21 +32,31 @@ import {
   roughQuadratic,
   roughRect,
 } from "@/lib/engine/rough";
+import { sketchParts } from "@/lib/engine/sketch";
 import { layoutText } from "@/lib/engine/text";
-import type { TimedScene, TimedStep } from "@/lib/engine/timeline";
+import { approachSeconds } from "@/lib/engine/hand-motion";
+import {
+  STEP_GAP_SECONDS,
+  buildTimeline,
+  type Timeline,
+  type TimedScene,
+  type TimedStep,
+} from "@/lib/engine/timeline";
 import type {
   BulletElement,
   DrawElement,
   EmphasisElement,
   SceneLayout,
   Slot,
+  Storyboard,
 } from "@/types/storyboard";
 
 export interface PlacedStep {
   timed: TimedStep;
   element: DrawElement;
   parts: Part[];
-  windows: PartWindow[];
+  /** When the marker is on each part, and where it goes in between. */
+  pen: PenPlan;
   /** The ink this step leaves, for emphasis and arrows to point at. */
   bounds: Box;
 }
@@ -52,6 +64,7 @@ export interface PlacedStep {
 export interface ScenePlan {
   scene: TimedScene;
   steps: PlacedStep[];
+  camera: CameraKey[];
 }
 
 const GAP = 22;
@@ -70,14 +83,14 @@ const BULLET_GLYPHS: Record<string, string> = {
 };
 
 type FlowElement = Extract<DrawElement, { type: "title" | "text" | "bullet" | "formula" }>;
-type VisualElement = Extract<DrawElement, { type: "icon" | "diagram" }>;
+type VisualElement = Extract<DrawElement, { type: "icon" | "diagram" | "sketch" }>;
 
 function isFlow(element: DrawElement): element is FlowElement {
   return ["title", "text", "bullet", "formula"].includes(element.type);
 }
 
 function isVisual(element: DrawElement): element is VisualElement {
-  return element.type === "icon" || element.type === "diagram";
+  return element.type === "icon" || element.type === "diagram" || element.type === "sketch";
 }
 
 function slotOf(element: FlowElement | VisualElement): Slot {
@@ -194,8 +207,10 @@ function measureBullet(
 
 function buildVisual(element: VisualElement, region: Box, scale: number) {
   if (element.type === "diagram") {
-    const parts = diagramParts(element, region, scale);
-    return { parts, bounds: region };
+    return { parts: diagramParts(element, region, scale), bounds: region };
+  }
+  if (element.type === "sketch") {
+    return { parts: sketchParts(element, region, scale), bounds: region };
   }
 
   const wanted = Math.min(1.3, Math.max(0.4, element.scale ?? 1));
@@ -206,7 +221,9 @@ function buildVisual(element: VisualElement, region: Box, scale: number) {
     w: size,
     h: size,
   };
-  const paths = (ICON_PATHS[element.id] ?? []).flatMap((d) =>
+  // Ordered before Rough.js expands each path, so the hand works its way
+  // around the shape instead of hopping across it in the designer's order.
+  const paths = orderPaths(ICON_PATHS[element.id] ?? []).flatMap((d) =>
     roughPath(d, { roughness: 0.5, bowing: 0.6, strokeWidth: 0.9 }),
   );
   const parts: Part[] = [
@@ -224,8 +241,8 @@ function buildVisual(element: VisualElement, region: Box, scale: number) {
   return { parts, bounds: frame };
 }
 
-/** Diagrams deserve more room than a decorative icon sharing their slot. */
-const visualWeight = (element: VisualElement) => (element.type === "diagram" ? 2 : 1);
+/** Drawings that explain deserve more room than one sharing their slot. */
+const visualWeight = (element: VisualElement) => (element.type === "icon" ? 1 : 2);
 
 /* -------------------------------------------------------------------------- */
 /*                                Slot layout                                 */
@@ -426,10 +443,61 @@ export function planScene(scene: TimedScene): ScenePlan {
       lastInk = null;
     }
 
-    return { timed, element, parts, windows: partWindows(parts), bounds };
+    return { timed, element, parts, pen: planPen(parts), bounds };
   });
 
-  return { scene, steps };
+  return { scene, steps, camera: planCamera(cameraShots(steps)) };
+}
+
+/**
+ * What the frame should contain at each step: everything drawn since the board
+ * was last wiped, plus what is being drawn now. The camera therefore starts
+ * close on an opening title and widens as the scene fills — which is the move
+ * a person makes with their attention anyway.
+ */
+function cameraShots(steps: PlacedStep[]) {
+  const shots: { at: number; focus: Box }[] = [];
+  let standing: Box | null = null;
+
+  for (const step of steps) {
+    if (step.element.type === "erase") {
+      standing = null;
+      continue;
+    }
+    if (step.parts.length === 0) continue;
+    standing = union(standing, step.bounds);
+    shots.push({ at: step.timed.from, focus: standing });
+  }
+
+  return shots;
+}
+
+/**
+ * Plans a whole storyboard, twice.
+ *
+ * The timeline has to hand out frames before anything has been drawn, so the
+ * first pass works off an estimate of how long each element takes. The planner
+ * then measures the truth — the real length of every stroke and every hop
+ * between them — and the timeline is rebuilt with those numbers.
+ *
+ * Without the second pass the estimate decides the pacing, and it is always
+ * wrong in the same direction: a diagram is many small strokes with a lot of
+ * travel between them, so it is consistently given less room than it needs and
+ * drawn at a speed no hand could manage.
+ *
+ * The geometry does not depend on the timing, so the second pass draws exactly
+ * what the first one did; everything it needs is cached by then.
+ */
+export function planStoryboard(storyboard: Storyboard): {
+  timeline: Timeline;
+  plans: ScenePlan[];
+} {
+  const first = buildTimeline(storyboard).scenes.map(planScene);
+  const natural = first.map((plan) => plan.steps.map((step) => step.pen.seconds));
+  const approach = first.map((plan) => approachSeconds(plan.steps, STEP_GAP_SECONDS));
+
+  const timeline = buildTimeline(storyboard, natural, approach);
+  return { timeline, plans: timeline.scenes.map(planScene) };
 }
 
 /** Steps still visible at `frame`, honouring any erase that has happened. */

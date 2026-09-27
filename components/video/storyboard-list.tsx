@@ -6,6 +6,7 @@ import {
   Network,
   PenLine,
   Shapes,
+  Sparkles,
   Sigma,
   Type,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const ELEMENT_ICONS: Record<DrawElementType, typeof Type> = {
   text: Type,
   bullet: ListChecks,
   icon: Shapes,
+  sketch: Sparkles,
   arrow: ArrowRight,
   emphasis: PenLine,
   diagram: Network,
@@ -38,6 +40,11 @@ function describe(element: DrawElement): string {
       return `Viñeta: ${element.text}`;
     case "icon":
       return `Dibuja el icono ${element.id}`;
+    case "sketch": {
+      const joins = { arrow: " → ", plus: " + ", equals: " = ", vs: " vs ", none: " · " };
+      const pieces = element.items.map((item) => item.label || item.icon);
+      return `Dibuja ${pieces.join(joins[element.relation ?? "none"])}`;
+    }
     case "arrow":
       return `Flecha de ${element.from} a ${element.to}`;
     case "emphasis":

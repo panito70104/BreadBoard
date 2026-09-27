@@ -11,9 +11,12 @@
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
     "setup": "tsx --env-file=.env.local scripts/setup.ts",
+    "voices": "tsx --env-file=.env.local scripts/voices.mts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
-    "icons:extract": "node scripts/extract-icon-paths.mjs"
+    "icons:extract": "node scripts/extract-icon-paths.mjs",
+    "engine:verify": "tsx --tsconfig ./tsconfig.json scripts/verify-engine.mts",
+    "voice:verify": "tsx --tsconfig ./tsconfig.json scripts/verify-voice.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

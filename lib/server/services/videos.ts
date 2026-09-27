@@ -14,15 +14,18 @@ import { db, schema } from "@/lib/server/db/client";
 import type { DocumentRow, VideoRow } from "@/lib/server/db/schema";
 import { notFound } from "@/lib/server/http";
 import { isUuid } from "@/lib/server/ids";
-import type { GenerationStage, Video, VideoDurationMinutes } from "@/types";
+import type { GenerationStage, Video } from "@/types";
+
+import { deleteObject } from "@/lib/server/storage";
 
 import { deleteDocument, toDocumentDto } from "./documents";
 
 const STAGE_PROGRESS: Record<GenerationStage, number> = {
   queued: 8,
   reading: 30,
-  storyboarding: 58,
-  finalizing: 90,
+  storyboarding: 52,
+  voicing: 76,
+  finalizing: 92,
   done: 100,
 };
 
@@ -48,12 +51,18 @@ export function toVideoDto(row: VideoRow, document: DocumentRow | null): Video {
     style: row.style as Video["style"],
     sourceDocument: document ? toDocumentDto(document) : { ...MISSING_DOCUMENT },
     storyboard: row.storyboard?.scenes ?? [],
+    audioUrls: Object.fromEntries(
+      (row.storyboard?.scenes ?? [])
+        .filter((scene) => scene.audio)
+        .map((scene) => [scene.id, `/api/videos/${row.id}/audio/${scene.id}`]),
+    ),
     prompt: row.prompt ?? undefined,
     error: row.error ?? undefined,
     stage,
     progress: row.status === "generating" ? STAGE_PROGRESS[stage] : undefined,
-    requestedMinutes: row.requestedMinutes as VideoDurationMinutes,
+    requestedMinutes: row.requestedMinutes,
     source: row.source as Video["source"],
+    language: row.storyboard?.language,
     notice: row.notice ?? undefined,
   };
 }
@@ -98,6 +107,20 @@ export async function getVideo(ownerId: string, id: string): Promise<Video> {
  */
 export async function deleteVideo(ownerId: string, id: string) {
   const { video, document } = await getOwnedVideoRow(ownerId, id);
+
+  // The voice-over is the only thing a video owns in a bucket; without this
+  // the mp3s outlive the row that knew their keys and can never be found again.
+  await Promise.all(
+    (video.storyboard?.scenes ?? [])
+      .map((scene) => scene.audio?.key)
+      .filter((key): key is string => Boolean(key))
+      .map((key) =>
+        deleteObject("videos", key).catch((error) =>
+          console.error(`[videos] no se pudo borrar ${key}`, error),
+        ),
+      ),
+  );
+
   await db().delete(schema.videos).where(eq(schema.videos.id, video.id));
   if (document) await deleteDocument(document);
 }

@@ -118,12 +118,6 @@ export interface VideoStyleOption {
   swatch: [string, string, string];
 }
 
-export interface VideoDurationOption {
-  id: VideoDurationMinutes;
-  label: string;
-  description: string;
-}
-
 /* -------------------------------------------------------------------------- */
 /*                                 Storyboard                                 */
 /* -------------------------------------------------------------------------- */
@@ -177,6 +171,7 @@ export type GenerationStage =
   | "queued"
   | "reading"
   | "storyboarding"
+  | "voicing"
   | "finalizing"
   | "done";
 
@@ -194,16 +189,26 @@ export interface Video {
   thumbnailUrl?: string;
   /** Signed playback URL once rendering is wired up. */
   videoUrl?: string;
+  /**
+   * Where to fetch each scene's voice-over, by scene id. Missing entries are
+   * scenes that came out silent; an empty object is a video with no voice.
+   */
+  audioUrls?: Record<string, string>;
   /** Present while `status === "generating"`. */
   progress?: number;
   /** Present when `status === "failed"`. */
   error?: string;
   /** Pipeline position while generating. */
   stage?: GenerationStage;
-  /** Minutes charged for this video. */
-  requestedMinutes?: VideoDurationMinutes;
+  /**
+   * Minutes this video costs. A hold of the worst case while it generates,
+   * settled down to what it really came out at once it is ready.
+   */
+  requestedMinutes?: number;
   /** Who wrote the storyboard: Claude, or the sample template. */
   source?: "claude" | "mock";
+  /** Language of the narration and of everything written on the board. */
+  language?: string;
   /** Worth telling the student, not an error (e.g. only part of a book was read). */
   notice?: string;
 }

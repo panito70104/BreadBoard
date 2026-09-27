@@ -16,7 +16,6 @@ import { useEffect, useMemo, useState } from "react";
 import { CircleAlert, Info, Sparkles } from "lucide-react";
 
 import { DocumentChip } from "@/components/upload/document-chip";
-import { DurationSelector } from "@/components/upload/duration-selector";
 import { GeneratedVideoCard } from "@/components/upload/generated-video-card";
 import { GenerationProgress } from "@/components/upload/generation-progress";
 import { StyleSelector } from "@/components/upload/style-selector";
@@ -33,7 +32,7 @@ import { useAuth } from "@/lib/auth-context";
 import { UPLOAD_LIMITS } from "@/lib/config";
 import { getDocumentType } from "@/lib/utils";
 import { useVideos } from "@/lib/video-store";
-import type { ServiceStatus, VideoDurationMinutes, VideoStyle } from "@/types";
+import type { ServiceStatus, VideoStyle } from "@/types";
 
 type Phase = "idle" | "selected" | "uploading" | "processing";
 
@@ -63,6 +62,9 @@ export function GenerationPanel() {
   const usage = user?.usage;
   const maxMinutes = usage?.maxVideoMinutes ?? 1;
   const remaining = usage?.minutesRemaining ?? 0;
+  // The video lasts what the content deserves, so it can never cost more than
+  // the plan's longest video — or than what is left, if that is less.
+  const mostItCanCost = Math.min(maxMinutes, remaining);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [file, setFile] = useState<File | null>(null);
@@ -75,11 +77,6 @@ export function GenerationPanel() {
   const [style, setStyle] = useState<VideoStyle>(
     user?.preferences?.defaultStyle ?? "classic-whiteboard",
   );
-  const [durationMinutes, setDurationMinutes] = useState<VideoDurationMinutes>(() => {
-    const preferred = user?.preferences?.defaultDurationMinutes ?? 1;
-    return (preferred <= maxMinutes ? preferred : 1) as VideoDurationMinutes;
-  });
-
   useEffect(() => {
     let cancelled = false;
     getServiceStatus()
@@ -129,7 +126,7 @@ export function GenerationPanel() {
     try {
       const created = await startGeneration(
         file,
-        { style, durationMinutes, prompt: prompt.trim() || undefined },
+        { style, prompt: prompt.trim() || undefined },
         setUploadFraction,
       );
       addVideo(created);
@@ -176,7 +173,6 @@ export function GenerationPanel() {
 
   const isWorking = phase === "uploading" || phase === "processing";
   const exhausted = remaining <= 0;
-  const tooLong = durationMinutes > remaining;
 
   return (
     <div className="space-y-5">
@@ -233,17 +229,16 @@ export function GenerationPanel() {
               value={prompt}
               maxLength={500}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Ej: Explícame el capítulo 1 de forma sencilla"
+              placeholder="Ej: Explícame el capítulo 1 de forma sencilla, o hazme un resumen corto"
               className="min-h-20"
             />
+            <p className="text-xs text-slate-500">
+              También decide cuánto dura: pide &ldquo;algo corto&rdquo; o
+              &ldquo;explícamelo a fondo&rdquo; y el video se ajusta.
+            </p>
           </div>
 
           <StyleSelector value={style} onChange={setStyle} />
-          <DurationSelector
-            value={durationMinutes}
-            onChange={setDurationMinutes}
-            maxMinutes={maxMinutes}
-          />
 
           <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-slate-500">
@@ -254,11 +249,11 @@ export function GenerationPanel() {
                     Sube de plan
                   </Link>
                 </>
-              ) : tooLong ? (
-                <>Te quedan {remaining} min: elige una duración menor.</>
               ) : file ? (
                 <>
-                  Este video usará {durationMinutes} de tus {remaining} min restantes.
+                  La duración la decide tu documento y lo que pidas. Como mucho
+                  usará {mostItCanCost} de tus {remaining} min restantes; si sale
+                  más corto, se te cobra menos.
                 </>
               ) : (
                 <>Sube un documento para activar la generación.</>
@@ -267,7 +262,7 @@ export function GenerationPanel() {
             <Button
               size="lg"
               onClick={handleGenerate}
-              disabled={!file || exhausted || tooLong}
+              disabled={!file || exhausted}
             >
               <Sparkles className="size-4" aria-hidden />
               Generar video

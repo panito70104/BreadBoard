@@ -72,7 +72,21 @@ export type BulletMarker = "dot" | "dash" | "check" | "number" | "arrow" | "star
 
 export type EmphasisShape = "underline" | "box" | "circle" | "brace" | "strike";
 
-export type DiagramKind = "axes" | "timeline" | "flow" | "compare" | "cycle" | "tree";
+export type DiagramKind =
+  | "axes"
+  | "timeline"
+  | "flow"
+  | "compare"
+  | "cycle"
+  | "tree"
+  | "table"
+  | "bars";
+
+/** A mark drawn over a sketch item once it is on the board. */
+export type SketchMark = "cross" | "check" | "question";
+
+/** How the pieces of a sketch relate to each other. */
+export type SketchRelation = "arrow" | "plus" | "equals" | "vs" | "none";
 
 /** What an emphasis wraps: a slot, or whatever was drawn immediately before. */
 export type ElementTarget = Slot | "prev";
@@ -109,6 +123,37 @@ export interface IconElement {
   color?: MarkColor;
 }
 
+/**
+ * Several drawings that mean something together: a factory, an arrow and a
+ * cloud; a book plus a pencil equals an idea; one thing crossed out beside the
+ * thing that replaces it.
+ *
+ * This is the element that lets the board explain instead of label. A lone icon
+ * can only decorate a sentence — a relation between pictures is an argument,
+ * and it is what you would draw for a child who cannot read the bullet anyway.
+ */
+export interface SketchItem {
+  /** A name from the icon vocabulary. */
+  icon: string;
+  /** One or two words under the drawing. Optional: often the picture is enough. */
+  label?: string;
+  /** Drawn over the icon after it: a cross, a tick, a question mark. */
+  mark?: SketchMark;
+  color?: MarkColor;
+}
+
+export interface SketchElement {
+  type: "sketch";
+  slot: Slot;
+  /** Two to four pieces, drawn left to right. */
+  items: SketchItem[];
+  /** Drawn in the gaps between the pieces. */
+  relation?: SketchRelation;
+  /** A short line under the whole thing. */
+  caption?: string;
+  color?: MarkColor;
+}
+
 export interface ArrowElement {
   type: "arrow";
   from: Slot;
@@ -130,6 +175,14 @@ export interface DiagramElement {
   kind: DiagramKind;
   /** Node/axis/step labels, in order. The engine lays them out. */
   labels: string[];
+  /**
+   * Bar heights for `"bars"`, in any positive unit — the engine scales them to
+   * the tallest. Without them the bars are drawn evenly stepped, which still
+   * reads as a comparison but claims nothing about the numbers.
+   */
+  values?: number[];
+  /** Columns for `"table"`; `labels` fills it row by row, the first row being the header. */
+  columns?: number;
 }
 
 export interface FormulaElement {
@@ -152,6 +205,7 @@ export type DrawElement =
   | TextElement
   | BulletElement
   | IconElement
+  | SketchElement
   | ArrowElement
   | EmphasisElement
   | DiagramElement
@@ -171,7 +225,26 @@ export interface StoryboardStep {
    * spaces the step out proportionally instead.
    */
   on: string | null;
+  /**
+   * Seconds into the scene at which `on` is actually spoken, read off the
+   * voice-over's own character timings.
+   *
+   * This is the whole point of `on`. Without a voice-over the engine guesses
+   * from where the phrase sits in the narration text; with one, it knows. Set
+   * during generation, absent on a silent storyboard.
+   */
+  at?: number;
   draw: DrawElement;
+}
+
+/** The voice-over for one scene. */
+export interface SceneAudio {
+  /** Object storage key of the mp3, in the videos bucket. */
+  key: string;
+  /** Measured length of the speech, from the last character's end time. */
+  durationSeconds: number;
+  /** Which ElevenLabs voice read it, so a re-render can stay consistent. */
+  voiceId: string;
 }
 
 export interface StoryboardScene {
@@ -185,11 +258,37 @@ export interface StoryboardScene {
   narration: string;
   layout: SceneLayout;
   steps: StoryboardStep[];
+  /**
+   * With a voice-over this is the length of the speech plus a beat to breathe;
+   * without one it is the model's estimate, fitted to the minutes paid for.
+   */
   durationSeconds: number;
+  audio?: SceneAudio;
 }
 
 export interface Storyboard {
   videoTitle: string;
+  /**
+   * How long this video should be, in seconds — chosen by the model, not by
+   * the student.
+   *
+   * A video lasts as long as its subject deserves: a two-page handout does not
+   * need three minutes and a dense chapter cannot be done in one. The model
+   * weighs how much there is to say against what the student asked for, within
+   * the ceiling their plan allows. Everything downstream — the word budget, the
+   * reading pace, the minutes charged — follows from this number.
+   */
+  targetSeconds: number;
+  /**
+   * The language everything is written and spoken in, as a base subtag
+   * ("es", "en", "pt"…).
+   *
+   * The model picks it: the document's own language, unless the student asked
+   * for another one, in which case the whole storyboard — narration, titles,
+   * bullets, labels — is written in the language they asked for. The voice
+   * follows from here.
+   */
+  language: string;
   scenes: StoryboardScene[];
   totalSeconds: number;
 }
@@ -209,7 +308,11 @@ export type StoryboardWarningCode =
   | "dangling-emphasis"
   | "text-truncated"
   | "duration-estimated"
-  | "scene-dropped";
+  | "scene-dropped"
+  | "text-heavy"
+  | "sketch-repaired"
+  | "voice-failed"
+  | "voice-skipped";
 
 /** What the validator had to fix. Log these: they are prompt-quality signal. */
 export interface StoryboardWarning {
