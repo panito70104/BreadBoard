@@ -13,7 +13,7 @@ import {
 } from "@/lib/utils";
 import type { Video } from "@/types";
 
-/** Mock thumbnail: a gradient board with a hand-written title. */
+/** Placeholder thumbnail until rendered frames exist: a board with the title. */
 function Thumbnail({ video }: { video: Video }) {
   const [from, to] = thumbnailGradient(video.id);
 

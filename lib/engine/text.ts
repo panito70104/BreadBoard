@@ -77,7 +77,35 @@ export interface TextLayout {
  * Greedy word wrap inside `maxWidth`, returning the position of every word so
  * the reveal and the hand can be driven off the same numbers.
  */
+const layoutCache = new Map<string, TextLayout>();
+
+/**
+ * Measurements depend on the web font being loaded; anything measured with the
+ * fallback font is wrong. Call this once fonts are ready to discard it.
+ */
+export function clearTextCache() {
+  layoutCache.clear();
+}
+
 export function layoutText(
+  text: string,
+  options: {
+    fontSize: number;
+    fontFamily: string;
+    maxWidth: number;
+    lineHeightRatio?: number;
+  },
+): TextLayout {
+  const key = `${text}\u0000${options.fontSize}\u0000${options.fontFamily}\u0000${options.maxWidth}\u0000${options.lineHeightRatio ?? 1.25}`;
+  const cached = layoutCache.get(key);
+  if (cached) return cached;
+  const result = computeLayout(text, options);
+  if (layoutCache.size > 2000) layoutCache.clear();
+  layoutCache.set(key, result);
+  return result;
+}
+
+function computeLayout(
   text: string,
   {
     fontSize,

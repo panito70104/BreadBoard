@@ -1,0 +1,51 @@
+# Local infrastructure for BreadBoardAI.
+#
+# Mirrors what Supabase provides so the migration is a config change, not a
+# rewrite: Postgres for data, an S3-compatible object store for files.
+#
+#   docker compose up -d        start everything
+#   npm run setup               apply migrations, create buckets, seed demo user
+#
+# Ports avoid the defaults so this never collides with a Postgres or object
+# store you already run. 54322 is the port Supabase's own local stack uses.
+
+name: breadboard
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: breadboard
+      POSTGRES_PASSWORD: breadboard
+      POSTGRES_DB: breadboard
+    ports:
+      - "54322:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U breadboard -d breadboard"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # S3-compatible object storage — the same API Supabase Storage exposes.
+  # RustFS is a drop-in for MinIO, whose images are no longer published.
+  # Buckets are created by `npm run setup` through the S3 API, so the same
+  # script works against any S3-compatible store.
+  storage:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: breadboard
+      RUSTFS_SECRET_KEY: breadboard-secret
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "59000:9000"   # S3 API
+      - "59001:9001"   # web console: http://localhost:59001
+    volumes:
+      - storage-data:/data
+
+volumes:
+  postgres-data:
+  storage-data:

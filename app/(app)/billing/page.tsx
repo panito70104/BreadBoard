@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createCheckoutSession, getPricingPlans } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatUtcDate } from "@/lib/utils";
 import type { SubscriptionPlan } from "@/types";
 
 /**
@@ -28,27 +28,53 @@ interface Invoice {
 const INVOICES: Invoice[] = [];
 
 export default function BillingPage() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void getPricingPlans().then((result) => {
-      setPlans(result);
-      setIsLoading(false);
-    });
+    let cancelled = false;
+    getPricingPlans()
+      .then((result) => {
+        if (!cancelled) setPlans(result);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : "No pudimos cargar los planes.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleSelectPlan(plan: SubscriptionPlan) {
     setPendingPlan(plan.id);
-    // TODO(payments): redirect to the Recurrente checkout URL returned here.
-    const { checkoutUrl } = await createCheckoutSession(plan.id);
-    setPendingPlan(null);
-    setNotice(
-      `Checkout mock para el plan ${plan.name}. Con Recurrente conectado te llevaríamos a ${checkoutUrl}.`,
-    );
+    setError(null);
+    setNotice(null);
+    try {
+      // TODO(payments): with Recurrente this returns a checkout URL to redirect
+      // to, and the plan changes only when its webhook confirms payment.
+      const { checkoutUrl } = await createCheckoutSession(plan.id);
+      if (checkoutUrl) {
+        window.location.assign(checkoutUrl);
+        return;
+      }
+      await refresh();
+      setNotice(
+        `Listo: ahora estás en el plan ${plan.name}. Los pagos todavía no están conectados, así que el cambio fue inmediato y sin cobro.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No pudimos cambiar de plan.");
+    } finally {
+      setPendingPlan(null);
+    }
   }
 
   const usageRatio =
@@ -71,7 +97,11 @@ export default function BillingPage() {
               <p className="text-sm font-semibold text-slate-900">
                 Plan {user?.planId ?? "free"}
               </p>
-              <p className="text-xs text-slate-500">Se renueva el 1 de cada mes</p>
+              <p className="text-xs text-slate-500">
+                {user?.usage
+                  ? `Tus minutos se renuevan el ${formatUtcDate(user.usage.periodEnd)}`
+                  : "Tus minutos se renuevan el 1 de cada mes"}
+              </p>
             </div>
           </div>
 
@@ -91,14 +121,29 @@ export default function BillingPage() {
             </div>
           )}
 
-          <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
-            <Button variant="outline" size="sm">
-              Actualizar método de pago
-            </Button>
-            <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50">
-              Cancelar plan
-            </Button>
-          </div>
+          {user && user.planId !== "free" && (
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:bg-red-50"
+                isLoading={pendingPlan === "free"}
+                onClick={() => {
+                  const free = plans.find((plan) => plan.id === "free");
+                  if (
+                    free &&
+                    window.confirm(
+                      "¿Volver al plan Free? Pasarás a 3 minutos al mes y videos de hasta 1 minuto. Tus videos se conservan.",
+                    )
+                  ) {
+                    void handleSelectPlan(free);
+                  }
+                }}
+              >
+                Cancelar plan
+              </Button>
+            </div>
+          )}
         </Card>
 
         <Card className="p-5 sm:p-6">
@@ -134,6 +179,11 @@ export default function BillingPage() {
       {notice && (
         <p className="animate-fade-in mt-6 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">
           {notice}
+        </p>
+      )}
+      {error && (
+        <p className="animate-fade-in mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </p>
       )}
 

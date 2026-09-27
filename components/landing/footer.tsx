@@ -41,7 +41,7 @@ export function Footer() {
             © {new Date().getFullYear()} BreadBoardAI. Todos los derechos reservados.
           </p>
           <p className="text-xs text-slate-400">
-            Versión demo · datos de ejemplo, sin backend conectado.
+            Tus documentos y videos son privados.
           </p>
         </div>
       </Container>

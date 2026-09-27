@@ -18,6 +18,22 @@ export function formatDate(iso: string) {
   return DATE_FORMATTER.format(new Date(iso));
 }
 
+const UTC_DATE_FORMATTER = new Intl.DateTimeFormat("es-ES", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/**
+ * For dates defined in UTC, like billing periods. Formatting them in local time
+ * turns "1 Oct 00:00 UTC" into "30 Sep" west of Greenwich, which contradicts
+ * the "renews on the 1st" rule the student was told.
+ */
+export function formatUtcDate(iso: string) {
+  return UTC_DATE_FORMATTER.format(new Date(iso));
+}
+
 /** "hace 3 h" / "ayer" style label used in the sidebar and video cards. */
 export function formatRelativeDate(iso: string, now: Date = new Date()) {
   const diffMs = now.getTime() - new Date(iso).getTime();
@@ -86,16 +102,6 @@ export function titleFromFileName(fileName: string) {
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
-/** "maria.lopez@uni.edu" -> "Maria Lopez", so a login has a name to show. */
-export function nameFromEmail(email: string) {
-  const local = email.split("@")[0] ?? "";
-  const words = local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1));
-  return words.join(" ") || "Estudiante";
-}
-
 export function initials(name: string) {
   return name
     .split(" ")
@@ -103,15 +109,6 @@ export function initials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
-}
-
-export function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-/** Stable-enough id generator for mock records created in the browser. */
-export function createId(prefix: string) {
-  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 /** Deterministic pastel pair so every video gets a distinct mock thumbnail. */

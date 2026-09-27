@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { videoStyles } from "@/data/mock";
-import { getVideoById } from "@/lib/api";
+import { documentDownloadUrl, getVideoById } from "@/lib/api";
 import { formatBytes, formatDate, formatDuration } from "@/lib/utils";
 import { useVideos } from "@/lib/video-store";
 import type { Video } from "@/types";
@@ -155,7 +155,19 @@ export default function VideoDetailPage({ params }: PageProps<"/videos/[id]">) {
               <Icon className="size-3.5" aria-hidden />
               {label}
             </dt>
-            <dd className="mt-2 truncate text-sm font-medium text-slate-900">{value}</dd>
+            <dd className="mt-2 truncate text-sm font-medium text-slate-900">
+              {label === "Documento fuente" && video.sourceDocument.id ? (
+                <a
+                  href={documentDownloadUrl(video.sourceDocument.id)}
+                  className="text-brand-700 underline-offset-2 hover:underline"
+                  title="Descargar el documento original"
+                >
+                  {value}
+                </a>
+              ) : (
+                value
+              )}
+            </dd>
             <dd className="mt-0.5 text-xs text-slate-500">{hint}</dd>
           </Card>
         ))}

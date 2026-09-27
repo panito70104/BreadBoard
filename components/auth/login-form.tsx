@@ -8,6 +8,19 @@ import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/field";
 import { useAuth } from "@/lib/auth-context";
 
+/**
+ * Where to go after signing in. Only same-site paths are honoured: an
+ * absolute or protocol-relative `next` (`https://…`, `//evil.com`) would turn
+ * the login page into an open redirect for phishing.
+ */
+function safeNextPath(search: string): string {
+  const next = new URLSearchParams(search).get("next");
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) {
+    return "/dashboard";
+  }
+  return next;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const { login } = useAuth();
@@ -24,8 +37,10 @@ export function LoginForm() {
 
     try {
       await login({ email, password });
-      // Mock redirect: with real auth this happens after the session cookie is set.
-      router.push("/dashboard");
+      // refresh() drops the router cache so the app layout renders against
+      // the new session cookie instead of anything cached while signed out.
+      router.replace(safeNextPath(window.location.search));
+      router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No pudimos iniciar sesión.");
       setIsSubmitting(false);

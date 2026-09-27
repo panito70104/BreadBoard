@@ -1,13 +1,11 @@
 "use client";
 
 import { AuthProvider } from "@/lib/auth-context";
-import { VideoProvider } from "@/lib/video-store";
 
-/** Single mount point for every client-side provider the app needs. */
+/**
+ * Providers for every page. The video store lives in the app layout instead:
+ * it needs a signed-in user, and public pages should not fetch videos.
+ */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <VideoProvider>{children}</VideoProvider>
-    </AuthProvider>
-  );
+  return <AuthProvider>{children}</AuthProvider>;
 }

@@ -8,11 +8,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
 import { Container } from "@/components/ui/section";
 import { navLinks } from "@/data/landing";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 8);
@@ -48,12 +50,20 @@ export function Navbar() {
           </ul>
 
           <div className="hidden items-center gap-2 md:flex">
-            <Link href="/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              Iniciar sesión
-            </Link>
-            <Link href="/signup" className={buttonVariants({ size: "sm" })}>
-              Empezar gratis
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/dashboard" className={buttonVariants({ size: "sm" })}>
+                Ir al dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                  Iniciar sesión
+                </Link>
+                <Link href="/signup" className={buttonVariants({ size: "sm" })}>
+                  Empezar gratis
+                </Link>
+              </>
+            )}
           </div>
 
           <button

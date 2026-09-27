@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Plus, X } from "lucide-react";
 
 import { SidebarVideoItem } from "@/components/dashboard/sidebar-video-item";
@@ -23,6 +23,7 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout, isLoading } = useAuth();
   const { videos, isLoading: areVideosLoading } = useVideos();
 
@@ -174,7 +175,11 @@ export function Sidebar({
               </div>
               <button
                 type="button"
-                onClick={() => void logout()}
+                onClick={async () => {
+                  await logout();
+                  router.replace("/login");
+                  router.refresh();
+                }}
                 aria-label="Cerrar sesión"
                 className="inline-flex size-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >

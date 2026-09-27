@@ -25,13 +25,29 @@ export interface User {
   /** Usage counters drive the sidebar/billing meters. Billing is per minute. */
   minutesUsed: number;
   minutesLimit: number;
+  /** Full usage picture, present when the server sends it. */
+  usage?: UsageInfo;
+  preferences?: UserPreferences;
 }
 
-export interface AuthSession {
-  user: User;
-  /** Placeholder for the JWT / session cookie the auth provider will issue. */
-  token: string;
-  expiresAt: string;
+export interface UsageInfo {
+  planId: PlanId;
+  minutesUsed: number;
+  minutesLimit: number;
+  minutesRemaining: number;
+  maxVideoMinutes: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+export interface UserPreferences {
+  defaultStyle: VideoStyle;
+  defaultDurationMinutes: VideoDurationMinutes;
+}
+
+/** What the server can do right now — shown before the student commits. */
+export interface ServiceStatus {
+  storyboardProvider: "claude" | "mock";
 }
 
 export interface LoginCredentials {
@@ -108,27 +124,6 @@ export interface VideoDurationOption {
   description: string;
 }
 
-/** Payload sent to `POST /generation-jobs` once the backend exists. */
-export interface GenerationJobInput {
-  documentId: string;
-  /** Free-form request: "Explícame el capítulo 1 de forma sencilla". */
-  prompt?: string;
-  style: VideoStyle;
-  durationMinutes: VideoDurationMinutes;
-}
-
-export interface GenerationJob {
-  id: string;
-  documentId: string;
-  status: GenerationStatus;
-  /** 0–100, drives the progress bar. */
-  progress: number;
-  steps: GenerationStep[];
-  videoId?: string;
-  error?: string;
-  createdAt: string;
-}
-
 /* -------------------------------------------------------------------------- */
 /*                                 Storyboard                                 */
 /* -------------------------------------------------------------------------- */
@@ -177,6 +172,14 @@ export type {
 
 export type VideoStatus = "ready" | "generating" | "failed";
 
+/** Where the server-side pipeline is while a video is generating. */
+export type GenerationStage =
+  | "queued"
+  | "reading"
+  | "storyboarding"
+  | "finalizing"
+  | "done";
+
 export interface Video {
   id: string;
   title: string;
@@ -195,6 +198,14 @@ export interface Video {
   progress?: number;
   /** Present when `status === "failed"`. */
   error?: string;
+  /** Pipeline position while generating. */
+  stage?: GenerationStage;
+  /** Minutes charged for this video. */
+  requestedMinutes?: VideoDurationMinutes;
+  /** Who wrote the storyboard: Claude, or the sample template. */
+  source?: "claude" | "mock";
+  /** Worth telling the student, not an error (e.g. only part of a book was read). */
+  notice?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -221,18 +232,4 @@ export interface SubscriptionPlan {
   features: PlanFeature[];
   ctaLabel: string;
   highlighted?: boolean;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                               API primitives                               */
-/* -------------------------------------------------------------------------- */
-
-/** Envelope every mock call returns, mirroring the planned REST responses. */
-export interface ApiResult<T> {
-  data: T;
-}
-
-export interface ApiError {
-  message: string;
-  code?: string;
 }

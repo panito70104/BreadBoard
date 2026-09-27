@@ -8,7 +8,7 @@ import {
 } from "@/lib/utils";
 import type { Video } from "@/types";
 
-/** Success state shown right after a mock generation finishes. */
+/** Success state shown when a generation finishes. */
 export function GeneratedVideoCard({
   video,
   onCreateAnother,

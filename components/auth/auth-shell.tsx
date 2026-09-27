@@ -49,7 +49,7 @@ export function AuthShell({
         </div>
 
         <p className="text-center text-xs text-slate-400">
-          Demo sin autenticación real: cualquier correo válido y 6+ caracteres funcionan.
+          Tus documentos son privados: solo tú puedes ver lo que subes.
         </p>
       </div>
 

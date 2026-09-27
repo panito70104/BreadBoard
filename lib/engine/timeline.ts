@@ -64,7 +64,8 @@ function drawSeconds(element: DrawElement): number {
     case "emphasis":
       return element.shape === "box" ? 0.9 : 0.5;
     case "diagram":
-      return 1.2 + element.labels.length * 0.35;
+      // Strokes plus every label written out.
+      return 1.6 + element.labels.reduce((sum, label) => sum + 0.3 + label.length * 0.04, 0);
     case "erase":
       return 0.8;
   }

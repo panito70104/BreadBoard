@@ -1,46 +1,34 @@
 "use client";
 
-import { layoutText, writingHead } from "@/lib/engine/text";
-import { cn } from "@/lib/utils";
+import { writingHead, type TextLayout } from "@/lib/engine/text";
 
 export interface DrawnTextProps {
-  text: string;
+  layout: TextLayout;
+  /** Top-left of the block on the board. */
+  x: number;
+  y: number;
   fontSize: number;
   fontFamily: string;
-  maxWidth: number;
   color: string;
   /** 0–1 through the writing of this block. */
   progress: number;
-  align?: "left" | "center";
-  className?: string;
 }
 
 /**
- * Handwritten text that writes itself.
- *
- * Words are revealed one at a time, and the word currently being written is
- * clipped horizontally so it grows left to right. That is what lets the hand
- * sit on the growing edge instead of popping between finished words.
+ * Handwritten text that writes itself, word by word. The word being written
+ * is clipped so it grows left to right, which is what lets the hand sit on the
+ * growing edge instead of hopping between finished words.
  */
-export function DrawnText({
-  text,
-  fontSize,
-  fontFamily,
-  maxWidth,
-  color,
-  progress,
-  align = "left",
-  className,
-}: DrawnTextProps) {
-  const layout = layoutText(text, { fontSize, fontFamily, maxWidth });
+export function DrawnText({ layout, x, y, fontSize, fontFamily, color, progress }: DrawnTextProps) {
   const head = writingHead(layout, progress);
 
   return (
     <div
-      className={cn(className)}
       style={{
-        position: "relative",
-        width: maxWidth,
+        position: "absolute",
+        left: x,
+        top: y,
+        width: layout.width + fontSize,
         height: layout.height,
         fontFamily,
         fontSize,
@@ -55,16 +43,10 @@ export function DrawnText({
           index === head.visibleWords && progress < 1
             ? `inset(0 ${Math.max(0, (1 - head.partial) * 100)}% 0 0)`
             : undefined;
-
         return (
           <span
             key={`${word.text}-${index}`}
-            style={{
-              position: "absolute",
-              left: align === "center" ? word.x + (maxWidth - layout.width) / 2 : word.x,
-              top: word.y,
-              clipPath: clip,
-            }}
+            style={{ position: "absolute", left: word.x, top: word.y, clipPath: clip }}
           >
             {word.text}
           </span>
@@ -72,14 +54,4 @@ export function DrawnText({
       })}
     </div>
   );
-}
-
-/** Where the marker tip should be, relative to the block's top-left. */
-export function textHead(
-  text: string,
-  options: { fontSize: number; fontFamily: string; maxWidth: number },
-  progress: number,
-) {
-  const layout = layoutText(text, options);
-  return writingHead(layout, progress);
 }

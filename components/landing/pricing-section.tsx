@@ -1,10 +1,10 @@
 import { PricingGrid } from "@/components/pricing/pricing-grid";
 import { Container, Section, SectionHeading } from "@/components/ui/section";
-import { getPricingPlans } from "@/lib/api";
+import { listPlans } from "@/lib/server/services/plans";
 
-/** Server component: reads plans through the same mock API the app uses. */
+/** Server component: reads the plan catalogue directly — the same one the API serves. */
 export async function PricingSection() {
-  const plans = await getPricingPlans();
+  const plans = listPlans();
 
   return (
     <Section id="precios" className="scroll-mt-16 border-y border-slate-200/70 bg-white">

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, CircleAlert } from "lucide-react";
 
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { DurationSelector } from "@/components/upload/duration-selector";
@@ -10,32 +10,111 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldHint, Input, Label } from "@/components/ui/field";
-import { integrations } from "@/lib/config";
+import { getServiceStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { VideoDurationMinutes, VideoStyle } from "@/types";
+import { cn } from "@/lib/utils";
+import type { ServiceStatus, VideoDurationMinutes, VideoStyle } from "@/types";
+
+type IntegrationState = "active" | "example" | "pending";
+
+const STATE_LABEL: Record<IntegrationState, string> = {
+  active: "Activo",
+  example: "Modo ejemplo",
+  pending: "Pendiente",
+};
+
+const STATE_CLASS: Record<IntegrationState, string> = {
+  active: "bg-emerald-50 text-emerald-700",
+  example: "bg-amber-50 text-amber-800",
+  pending: "bg-slate-100 text-slate-500",
+};
 
 export default function SettingsPage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateProfile } = useAuth();
 
-  /**
-   * Draft edits only. Until the user touches a field the values come straight
-   * from the session, which loads after the first render.
-   */
-  const [draft, setDraft] = useState<{ name: string; email: string } | null>(null);
-  const name = draft?.name ?? user?.name ?? "";
-  const email = draft?.email ?? user?.email ?? "";
+  /** Draft edits only; untouched fields read straight from the account. */
+  const [draftName, setDraftName] = useState<string | null>(null);
+  const [draftStyle, setDraftStyle] = useState<VideoStyle | null>(null);
+  const [draftDuration, setDraftDuration] = useState<VideoDurationMinutes | null>(null);
 
-  const [defaultStyle, setDefaultStyle] = useState<VideoStyle>("classic-whiteboard");
-  const [defaultDuration, setDefaultDuration] = useState<VideoDurationMinutes>(3);
-  const [isSaved, setIsSaved] = useState(false);
+  const name = draftName ?? user?.name ?? "";
+  const style = draftStyle ?? user?.preferences?.defaultStyle ?? "classic-whiteboard";
+  const duration = draftDuration ?? user?.preferences?.defaultDurationMinutes ?? 1;
 
-  function handleSave(event: React.FormEvent<HTMLFormElement>) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<ServiceStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getServiceStatus()
+      .then((next) => {
+        if (!cancelled) setStatus(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isDirty = draftName !== null || draftStyle !== null || draftDuration !== null;
+
+  async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // TODO(backend): PATCH /users/me with the profile and default preferences.
-    updateUser({ name, email });
-    setIsSaved(true);
-    window.setTimeout(() => setIsSaved(false), 2400);
+    setError(null);
+    setIsSaving(true);
+    try {
+      await updateProfile({
+        ...(draftName !== null && { name: draftName }),
+        ...(draftStyle !== null && { defaultStyle: draftStyle }),
+        ...(draftDuration !== null && { defaultDurationMinutes: draftDuration }),
+      });
+      setDraftName(null);
+      setDraftStyle(null);
+      setDraftDuration(null);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2400);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No pudimos guardar los cambios.");
+    } finally {
+      setIsSaving(false);
+    }
   }
+
+  const integrations: Array<{ name: string; purpose: string; state: IntegrationState }> = [
+    {
+      name: "Base de datos (Postgres)",
+      purpose: "Cuentas, videos, documentos y consumo de minutos.",
+      state: "active",
+    },
+    {
+      name: "Almacenamiento (S3)",
+      purpose: "Tus documentos originales, privados y cifrados en tránsito.",
+      state: "active",
+    },
+    {
+      name: "Claude (Anthropic)",
+      purpose: "Lee tu documento y escribe el guion escena por escena.",
+      state:
+        status === null ? "pending" : status.storyboardProvider === "claude" ? "active" : "example",
+    },
+    {
+      name: "Voz (ElevenLabs)",
+      purpose: "Narración en audio de cada escena.",
+      state: "pending",
+    },
+    {
+      name: "Exportar a MP4 (Remotion)",
+      purpose: "Descargar el video como archivo.",
+      state: "pending",
+    },
+    {
+      name: "Pagos (Recurrente)",
+      purpose: "Cobro de los planes Student y Pro.",
+      state: "pending",
+    },
+  ];
 
   return (
     <PageBody>
@@ -47,11 +126,9 @@ export default function SettingsPage() {
 
           <div className="mt-5 flex items-center gap-4">
             <Avatar name={name || "Estudiante"} size="lg" />
-            <div>
-              <Button type="button" variant="outline" size="sm">
-                Cambiar foto
-              </Button>
-              <FieldHint className="mt-1.5">JPG o PNG, hasta 2 MB.</FieldHint>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-slate-900">{name}</p>
+              <p className="truncate text-sm text-slate-500">{user?.email}</p>
             </div>
           </div>
 
@@ -61,42 +138,46 @@ export default function SettingsPage() {
               <Input
                 id="name"
                 value={name}
-                onChange={(event) =>
-                  setDraft({ name: event.target.value, email })
-                }
+                maxLength={80}
+                onChange={(event) => setDraftName(event.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Correo</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) =>
-                  setDraft({ name, email: event.target.value })
-                }
-              />
+              <Input id="email" type="email" value={user?.email ?? ""} disabled />
+              <FieldHint>El correo no se puede cambiar por ahora.</FieldHint>
             </div>
           </div>
         </Card>
 
         <Card as="section" className="space-y-6 p-5 sm:p-6">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">
-              Preferencias de generación
-            </h2>
+            <h2 className="text-sm font-semibold text-slate-900">Preferencias de generación</h2>
             <p className="mt-1 text-sm text-slate-600">
               Lo que preseleccionamos cada vez que subes un documento.
             </p>
           </div>
 
-          <StyleSelector value={defaultStyle} onChange={setDefaultStyle} />
-          <DurationSelector value={defaultDuration} onChange={setDefaultDuration} />
+          <StyleSelector value={style} onChange={setDraftStyle} />
+          <DurationSelector
+            value={duration}
+            onChange={setDraftDuration}
+            maxMinutes={user?.usage?.maxVideoMinutes}
+          />
         </Card>
 
+        {error && (
+          <p className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {error}
+          </p>
+        )}
+
         <div className="flex items-center gap-3">
-          <Button type="submit">Guardar cambios</Button>
-          {isSaved && (
+          <Button type="submit" disabled={!isDirty} isLoading={isSaving}>
+            Guardar cambios
+          </Button>
+          {saved && (
             <span className="animate-fade-in flex items-center gap-1.5 text-sm text-emerald-700">
               <Check className="size-4" aria-hidden />
               Guardado
@@ -107,27 +188,25 @@ export default function SettingsPage() {
 
       <section className="mt-12">
         <h2 className="text-lg font-semibold text-slate-900">Integraciones</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Servicios previstos para la versión conectada. Hoy todo funciona con datos mock.
-        </p>
+        <p className="mt-1 text-sm text-slate-600">Qué servicios están conectados ahora mismo.</p>
 
         <ul className="mt-5 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
           {integrations.map((integration) => (
             <li
-              key={integration.id}
+              key={integration.name}
               className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-900">
-                  {integration.provider}
-                </p>
+                <p className="text-sm font-medium text-slate-900">{integration.name}</p>
                 <p className="mt-0.5 text-sm text-slate-600">{integration.purpose}</p>
-                <p className="mt-1 font-mono text-xs text-slate-400">
-                  {integration.entryPoint}
-                </p>
               </div>
-              <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
-                Pendiente
+              <span
+                className={cn(
+                  "w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
+                  STATE_CLASS[integration.state],
+                )}
+              >
+                {STATE_LABEL[integration.state]}
               </span>
             </li>
           ))}

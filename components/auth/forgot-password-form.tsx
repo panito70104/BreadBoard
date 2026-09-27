@@ -5,7 +5,7 @@ import { MailCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/field";
-import { requestPasswordResetMock } from "@/lib/api";
+import { requestPasswordReset } from "@/lib/api";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -19,7 +19,7 @@ export function ForgotPasswordForm() {
     setIsSubmitting(true);
 
     try {
-      await requestPasswordResetMock(email);
+      await requestPasswordReset(email);
       setIsSent(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No pudimos enviar el correo.");

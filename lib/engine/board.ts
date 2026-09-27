@@ -12,6 +12,9 @@ import type { VideoStyle } from "@/types";
 
 export const BOARD = { width: 1920, height: 1080, fps: 30 } as const;
 
+/** The handwriting face, as a CSS font-family value. */
+export const HAND_FONT = "var(--font-hand), cursive";
+
 export interface BoardTheme {
   background: string;
   /** Faint grid or paper ruling drawn under the content. */

@@ -27,7 +27,10 @@ export function SignupForm() {
 
     try {
       await signup(form);
-      router.push("/dashboard");
+      // refresh() drops the router cache so the app layout renders against
+      // the new session cookie instead of anything cached while signed out.
+      router.replace("/dashboard");
+      router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No pudimos crear tu cuenta.");
       setIsSubmitting(false);
@@ -75,7 +78,7 @@ export function SignupForm() {
           onChange={update("password")}
           required
         />
-        <FieldHint>Mínimo 6 caracteres.</FieldHint>
+        <FieldHint>Mínimo 8 caracteres.</FieldHint>
       </div>
 
       <FieldError>{error}</FieldError>
