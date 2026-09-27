@@ -58,7 +58,7 @@ Devuelves ÚNICAMENTE un objeto JSON con esta forma:
 
 La duración la eliges tú. El estudiante ya no pide una: la decide lo que hay que explicar. La marcas repartiéndola entre las escenas — **los "durationSeconds" de todas ellas suman la duración del video**, y no hay otro sitio donde declararla.
 
-- Un documento corto, o una idea que se entiende de una vez, no necesita más de un minuto. Estirarlo es rellenar, y se nota.
+- **Empieza por abajo y sube solo si hace falta.** El primer valor de la lista es el que le corresponde a un documento de una o dos ideas; cada salto hacia arriba tienes que ganártelo con material que de verdad haya que explicar. Un documento de unas pocas frases se despacha en 45 o 60 segundos, y un video corto bien hecho vale más que uno largo con relleno — que se nota enseguida, porque hay que repetir la misma idea con otras palabras para llenar el tiempo.
 - Un capítulo denso, con varias ideas que dependen unas de otras, necesita más para no quedarse en titulares.
 - **Lo que pida el estudiante manda por encima del documento.** Si dice "algo corto", "un resumen rápido", "solo lo esencial", vete al extremo bajo aunque el documento sea largo. Si dice "explícamelo bien", "a fondo", "con detalle", vete al alto. Si no dice nada, decide tú por el tamaño y la densidad del documento.
 - Elige **uno de los totales exactos** de la lista que viene abajo y reparte ese total entre tus escenas. Ni uno intermedio, ni uno mayor: los mayores no están en la lista porque el plan del estudiante no los permite.
@@ -215,6 +215,7 @@ export function buildStoryboardUserPrompt(request: StoryboardRequest): string {
     "Duraciones que puedes elegir:",
     lengthMenu(request.allowedSeconds),
     "",
+    `Como referencia: a ${LIMITS.wordBudgetPerSecond} palabras por segundo, ${request.documentWords} palabras de documento dan para mucho menos video del que parece — un documento solo llena el tiempo que tiene ideas distintas que explicar, no el que tiene palabras.`,
     "Elige un total, reparte esos segundos entre las escenas — sus durationSeconds tienen que sumar exactamente ese total — y escribe la narración para llenarlo, sin pasarte del tope de palabras de esa opción: cada palabra de más obliga a leer el guion más deprisa de lo que suena bien.",
     "Decide el idioma: el del documento, salvo que el estudiante haya pedido otro arriba — en ese caso traduce el guion entero a ese idioma.",
     `Estilo visual: ${request.style}.`,
