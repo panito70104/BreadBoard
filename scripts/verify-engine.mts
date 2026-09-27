@@ -52,6 +52,38 @@ const scene = (
   durationSeconds,
 });
 
+/**
+ * A scene with a voice-over: every step knows the second its phrase is spoken.
+ *
+ * This is the case the whole engine exists to serve, and the one where being
+ * wrong is loudest — a drawing that lands after the narrator has moved on.
+ */
+const voicedScene = (index: number, at: number[]): StoryboardScene => ({
+  id: `v${index}`,
+  index,
+  title: `Con voz ${index}`,
+  summary: "",
+  narration: "Primero una cosa, después otra cosa, y al final la última de todas.",
+  layout: "visual-left-bullets-right",
+  durationSeconds: 26,
+  audio: { key: "x", durationSeconds: 25.2, voiceId: "v" },
+  steps: at.map((seconds, i) => ({
+    on: null,
+    at: seconds,
+    draw:
+      i === 0
+        ? { type: "title", text: "Con voz" }
+        : i % 2 === 1
+          ? {
+              type: "sketch",
+              slot: "visual",
+              items: [{ icon: "Coins" }, { icon: "ShoppingCart" }],
+              relation: "arrow",
+            }
+          : { type: "bullet", slot: "list", text: `Punto ${i}`, marker: "dot" },
+  })),
+});
+
 const storyboard: Storyboard = {
   videoTitle: "Prueba",
   language: "es",
@@ -109,6 +141,7 @@ const storyboard: Storyboard = {
       },
       { on: "a la derecha lo nuevo", draw: { type: "formula", slot: "left", text: "C = 2 x N" } },
     ]),
+    voicedScene(5, [0, 3.4, 9.1, 14.6, 20.3]),
     scene(4, "timeline", "Una línea de tiempo con tres momentos y un icono al final.", [
       { on: "Una línea de tiempo", draw: { type: "title", text: "La historia" } },
       { on: "tres momentos", draw: { type: "diagram", slot: "center", kind: "timeline", labels: ["1900", "1950", "2000"] } },
@@ -215,6 +248,23 @@ timeline.scenes.forEach((timed, sceneIndex) => {
     );
   }
 });
+
+/* --------------------------- the voice's own clock ------------------------ */
+
+// A step that declares the second it is spoken has to be drawn at that second.
+// Everything else in a scene bends around it: the drawing before gets less
+// time, the reach between them takes what is left. Nothing may push a cue late.
+for (const timed of timeline.scenes) {
+  for (const step of timed.steps) {
+    const at = step.step.at;
+    if (at === undefined) continue;
+    const landed = (step.from - timed.from) / BOARD.fps;
+    check(
+      Math.abs(landed - at) < 1 / BOARD.fps + 1e-6,
+      `escena ${timed.scene.index} paso ${step.index}: la voz lo dice en ${at}s y se dibuja en ${landed.toFixed(2)}s`,
+    );
+  }
+}
 
 /* ------------------------------ the validator ----------------------------- */
 

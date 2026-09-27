@@ -54,7 +54,12 @@ export function toVideoDto(row: VideoRow, document: DocumentRow | null): Video {
     audioUrls: Object.fromEntries(
       (row.storyboard?.scenes ?? [])
         .filter((scene) => scene.audio)
-        .map((scene) => [scene.id, `/api/videos/${row.id}/audio/${scene.id}`]),
+        // The `v` busts the browser cache when a regeneration overwrites the
+        // audio at the same storage key.
+        .map((scene) => [
+          scene.id,
+          `/api/videos/${row.id}/audio/${scene.id}?v=${scene.audio!.durationSeconds}`,
+        ]),
     ),
     prompt: row.prompt ?? undefined,
     error: row.error ?? undefined,

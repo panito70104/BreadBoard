@@ -175,29 +175,58 @@ function buildScene(
     }
   }
 
-  // Place each step at its phrase, never before the hand could have got there.
+  /**
+   * Where each step starts, in seconds into the scene.
+   *
+   * With a voice-over the answer is not negotiable: `at` is the second the
+   * phrase is spoken, measured off the audio, and the drawing has to be there.
+   * Anything else and the hand is illustrating a sentence the narrator finished
+   * two seconds ago. So the drawing gives way instead — a step whose neighbour
+   * is spoken right after it simply gets less time and is drawn faster.
+   *
+   * Without a voice-over none of these numbers are real. The starts are guesses
+   * from where the phrase sits in the narration text, so they are packed by
+   * demand instead: each step gets the room it needs and is pushed later when
+   * the one before it has not finished.
+   */
+  const voiced = scene.steps.some((step) => step.at !== undefined);
   const starts: number[] = [];
-  let cursor = 0;
-  for (let index = 0; index < count; index += 1) {
-    const earliest = cursor + gaps[index] * gapScale;
-    const start = Math.max(ratios[index] * scene.durationSeconds, earliest);
-    starts.push(start);
-    cursor = start + wanted[index] * drawScale;
-  }
 
-  // Late phrases can push the tail past the end of the scene. Pull the whole
-  // run back into the lead-in, and if that is not enough, give up on the
-  // phrases and pack purely by demand.
-  if (cursor > scene.durationSeconds) {
-    const shift = Math.min(cursor - scene.durationSeconds, starts[0]);
-    for (let index = 0; index < count; index += 1) starts[index] -= shift;
+  if (voiced) {
+    let previous = 0;
+    for (let index = 0; index < count; index += 1) {
+      // Never before the step before it — an `at` out of order means the phrase
+      // matched in the wrong place, not that the drawing should go backwards.
+      const start = Math.min(
+        scene.durationSeconds,
+        Math.max(previous, ratios[index] * scene.durationSeconds),
+      );
+      starts.push(start);
+      previous = start;
+    }
+  } else {
+    let cursor = 0;
+    for (let index = 0; index < count; index += 1) {
+      const earliest = cursor + gaps[index] * gapScale;
+      const start = Math.max(ratios[index] * scene.durationSeconds, earliest);
+      starts.push(start);
+      cursor = start + wanted[index] * drawScale;
+    }
 
-    if (starts[count - 1] + wanted[count - 1] * drawScale > scene.durationSeconds) {
-      let packed = 0;
-      for (let index = 0; index < count; index += 1) {
-        packed += gaps[index] * gapScale;
-        starts[index] = packed;
-        packed += wanted[index] * drawScale;
+    // Late phrases can push the tail past the end of the scene. Pull the whole
+    // run back into the lead-in, and if that is not enough, give up on the
+    // phrases and pack purely by demand.
+    if (cursor > scene.durationSeconds) {
+      const shift = Math.min(cursor - scene.durationSeconds, starts[0]);
+      for (let index = 0; index < count; index += 1) starts[index] -= shift;
+
+      if (starts[count - 1] + wanted[count - 1] * drawScale > scene.durationSeconds) {
+        let packed = 0;
+        for (let index = 0; index < count; index += 1) {
+          packed += gaps[index] * gapScale;
+          starts[index] = packed;
+          packed += wanted[index] * drawScale;
+        }
       }
     }
   }
@@ -208,14 +237,21 @@ function buildScene(
       index + 1 < count
         ? from + Math.round(starts[index + 1] * BOARD.fps)
         : from + durationInFrames;
-    const nextGap =
+    const room = nextFrame - startFrame;
+    const wantedGap =
       index + 1 < count ? Math.round(gaps[index + 1] * gapScale * BOARD.fps) : 0;
 
     // Room to draw in: whatever is left before the hand has to set off again.
-    const available = Math.max(
-      Math.max(1, Math.round(MIN_STEP_SECONDS * drawScale * BOARD.fps)),
-      nextFrame - startFrame - nextGap,
-    );
+    // When the voice sets the starts, two phrases said close together leave
+    // less room than the reach between them wants; the travel then takes what
+    // it can rather than swallowing the drawing whole.
+    const nextGap = voiced ? Math.min(wantedGap, Math.round(room * 0.4)) : wantedGap;
+    // And the floor drops, because a drawing that runs past its own cue is
+    // worse than a hurried one: the hand would be illustrating the sentence
+    // after it.
+    const floor = voiced ? 6 : Math.round(MIN_STEP_SECONDS * drawScale * BOARD.fps);
+
+    const available = Math.max(Math.max(1, floor), room - nextGap);
 
     return {
       step,

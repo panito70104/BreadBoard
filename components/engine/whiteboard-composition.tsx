@@ -129,7 +129,14 @@ export function WhiteboardComposition({
             from={timed.from}
             durationInFrames={timed.durationInFrames}
           >
-            <Audio src={src} />
+            {/*
+              Without this the Player keeps advancing frames while the audio
+              stalls. Remotion tolerates 0.65s of drift and then seeks the audio
+              back into place, which replays the second before — you hear the
+              last word of the sentence twice. Holding the clock until the audio
+              is ready costs a beat and removes the stutter entirely.
+            */}
+            <Audio src={src} pauseWhenBuffering />
           </Sequence>
         );
       })}
