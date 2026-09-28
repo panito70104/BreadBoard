@@ -14,6 +14,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -77,6 +78,89 @@ export async function getObjectBytes(name: BucketName, key: string): Promise<Uin
   );
   if (!result.Body) throw new Error(`Objeto vacío: ${key}`);
   return result.Body.transformToByteArray();
+}
+
+export async function objectSize(name: BucketName, key: string): Promise<number> {
+  const result = await client().send(
+    new HeadObjectCommand({ Bucket: bucket(name), Key: key }),
+  );
+  return result.ContentLength ?? 0;
+}
+
+/** One slice of an object, as a byte-range read answers it. */
+export interface ObjectSlice {
+  bytes: Uint8Array;
+  /** Inclusive offsets actually served. */
+  start: number;
+  end: number;
+  /** Size of the whole object. */
+  total: number;
+  /** False when the whole object came back. */
+  partial: boolean;
+}
+
+/** The caller asked for bytes the object does not have. */
+export class RangeNotSatisfiable extends Error {
+  constructor(readonly total: number | null) {
+    super("Rango fuera del objeto.");
+    this.name = "RangeNotSatisfiable";
+  }
+}
+
+/**
+ * Reads an object, or one byte range of it.
+ *
+ * The range is pushed down to S3 instead of being applied after the fact. A
+ * media player does not fetch a file once: it seeks, and every seek is a range
+ * request — so slicing a full download would turn each seek into a whole
+ * transfer of the file and a pause in the middle of a sentence. That is not
+ * only slow: a stalled read is exactly what makes Remotion pull the audio back
+ * into sync and replay the second before it.
+ */
+export async function getObjectRange(
+  name: BucketName,
+  key: string,
+  range?: string | null,
+): Promise<ObjectSlice> {
+  let result;
+  try {
+    result = await client().send(
+      new GetObjectCommand({ Bucket: bucket(name), Key: key, Range: range || undefined }),
+    );
+  } catch (cause) {
+    const unsatisfiable =
+      cause instanceof Error &&
+      (cause.name === "InvalidRange" ||
+        (cause as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 416);
+    // 416 has to carry the real size, so the player learns what it may ask for.
+    if (unsatisfiable) {
+      throw new RangeNotSatisfiable(await objectSize(name, key).catch(() => null));
+    }
+    throw cause;
+  }
+
+  if (!result.Body) throw new Error(`Objeto vacío: ${key}`);
+  const bytes = await result.Body.transformToByteArray();
+
+  // "bytes 0-1023/98765" on a partial read; absent when the whole object came.
+  const served = result.ContentRange?.match(/bytes (\d+)-(\d+)\/(\d+)/);
+  if (served) {
+    return {
+      bytes,
+      start: Number(served[1]),
+      end: Number(served[2]),
+      total: Number(served[3]),
+      partial: true,
+    };
+  }
+
+  return {
+    bytes,
+    start: 0,
+    end: Math.max(0, bytes.byteLength - 1),
+    total: bytes.byteLength,
+    partial: false,
+  };
 }
 
 export async function deleteObject(name: BucketName, key: string) {

@@ -12,7 +12,7 @@
  * instead, with the preview as the fallback while the render is queued.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { Maximize2, Pause, Play, Volume2 } from "lucide-react";
 
@@ -67,9 +67,87 @@ export function WhiteboardPlayer({ video }: { video: Video }) {
     };
   }, []);
 
-  const storyboard = toStoryboard(video);
-  const durationInFrames = Math.max(1, storyboardDurationInFrames(storyboard));
+  /**
+   * These have to keep their identity between renders.
+   *
+   * This component re-renders on every `frameupdate` — that is what moves the
+   * scrubber — and `inputProps` is handed straight to the composition, whose
+   * plan is memoized on the storyboard object. A fresh object per frame
+   * invalidates that memo, so the whole storyboard was being re-planned (all
+   * scenes, twice) thirty times a second. The frame loop then cannot keep up,
+   * the composition's clock falls behind the audio element, and Remotion pulls
+   * the audio back into place — which replays the second before, and you hear
+   * the last word of the sentence twice.
+   *
+   * So they are keyed on the video's *content*, not on the object holding it —
+   * because the object identity is not stable either. While any generation is
+   * in flight the video store re-fetches every 2.5s and replaces every video
+   * with a structurally identical copy, which keyed on `video` would throw the
+   * plan away and rebuild it mid-playback every few seconds: the same stall,
+   * just rarer, and one re-sync of the audio is already one word said twice.
+   * Stringifying this on each poll is nothing next to re-planning.
+   */
+  const signature = useMemo(
+    () =>
+      JSON.stringify([
+        video.title,
+        video.language,
+        video.durationSeconds,
+        video.style,
+        video.storyboard,
+        video.audioUrls,
+      ]),
+    [video],
+  );
+
+  const inputProps = useMemo(
+    () => ({ storyboard: toStoryboard(video), style: video.style, audioUrls: video.audioUrls }),
+    // `video` is read through `signature` on purpose — see above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [signature],
+  );
+  const durationInFrames = useMemo(
+    () => Math.max(1, storyboardDurationInFrames(inputProps.storyboard)),
+    [inputProps],
+  );
   const { fps } = BOARD_DIMENSIONS;
+
+  /**
+   * And the Player itself is held as an element, not re-created.
+   * Stable props are not enough: re-rendering `<Player>` once per frame costs
+   * far more than the scrubber it is paying for. Reusing the same element lets
+   * React skip the subtree entirely.
+   */
+  const surface = useMemo(
+    () => (
+      <Player
+        ref={playerRef}
+        component={WhiteboardComposition}
+        inputProps={inputProps}
+        durationInFrames={durationInFrames}
+        fps={fps}
+        compositionWidth={BOARD_DIMENSIONS.width}
+        compositionHeight={BOARD_DIMENSIONS.height}
+        style={{ width: "100%", height: "100%" }}
+        acknowledgeRemotionLicense
+        clickToPlay={false}
+        doubleClickToFullscreen
+        /*
+          One dedicated audio element per scene, instead of Remotion's pool.
+          The pool (five tags, the v4 default) exists to dodge mobile autoplay
+          rules by pre-mounting silent tags and then swapping their `src` as
+          scenes come and go. Playback here always starts from the button
+          below, so there is always a user gesture and nothing to dodge — and
+          the swapping is not free: assigning `src` reloads the element and
+          resets its clock, so a scene can begin on a tag that is still holding
+          the previous sentence. Remotion made 0 the default in v5 for this
+          reason.
+        */
+        numberOfSharedAudioTags={0}
+      />
+    ),
+    [inputProps, durationInFrames, fps],
+  );
 
   if (video.storyboard.length === 0) {
     return (
@@ -99,19 +177,7 @@ export function WhiteboardPlayer({ video }: { video: Video }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-card)]">
       <div className="relative aspect-video w-full bg-white">
-        <Player
-          ref={playerRef}
-          component={WhiteboardComposition}
-          inputProps={{ storyboard, style: video.style, audioUrls: video.audioUrls }}
-          durationInFrames={durationInFrames}
-          fps={fps}
-          compositionWidth={BOARD_DIMENSIONS.width}
-          compositionHeight={BOARD_DIMENSIONS.height}
-          style={{ width: "100%", height: "100%" }}
-          acknowledgeRemotionLicense
-          clickToPlay={false}
-          doubleClickToFullscreen
-        />
+        {surface}
 
         {!isPlaying && frame === 0 && (
           <button

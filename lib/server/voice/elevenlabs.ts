@@ -168,6 +168,48 @@ export async function resolveVoice(language: string): Promise<string> {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                                  Settings                                  */
+/* -------------------------------------------------------------------------- */
+
+interface ApiVoiceSettings {
+  stability?: number;
+  similarity_boost?: number;
+  style?: number;
+  use_speaker_boost?: boolean;
+}
+
+/**
+ * What a voice falls back to when its own settings cannot be read.
+ *
+ * These are ElevenLabs' defaults, which is what a premade voice ships with
+ * anyway. `stability` is the reason any of this is here: it is the setting that
+ * decides whether the model re-says a word, and it must never be left to
+ * chance — see `speak`.
+ */
+const DEFAULT_SETTINGS: ApiVoiceSettings = { stability: 0.5, similarity_boost: 0.75 };
+
+const savedSettings = new Map<string, ApiVoiceSettings>();
+
+/** The settings the voice was saved with, or the defaults. */
+async function voiceSettings(voiceId: string): Promise<ApiVoiceSettings> {
+  const cached = savedSettings.get(voiceId);
+  if (cached) return cached;
+
+  let settings = DEFAULT_SETTINGS;
+  try {
+    const response = await call(`/v1/voices/${encodeURIComponent(voiceId)}/settings`);
+    const body = (await response.json()) as ApiVoiceSettings;
+    if (typeof body.stability === "number") settings = body;
+  } catch {
+    // The same key without `voices_read` that `resolveVoice` already warns
+    // about. The defaults are what the voice would have been saved with.
+  }
+
+  savedSettings.set(voiceId, settings);
+  return settings;
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                   Speech                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -188,6 +230,19 @@ export async function speak(
   const model = env().ELEVENLABS_MODEL_ID;
   const voiceId = await resolveVoice(language);
 
+  /**
+   * `voice_settings` is a whole-object override, not a patch.
+   *
+   * Anything left out of it is not inherited from the voice — it falls back to
+   * the API's own default. So sending `{ speed }` on its own quietly dropped
+   * the voice's `stability` along for the ride, and an unstable voice is
+   * precisely one that stutters and says a word twice. Since the faster pass is
+   * the one that wins whenever a script came back long, that was the audio
+   * being delivered. The speed is therefore merged into the real settings
+   * rather than sent in place of them.
+   */
+  const settings = speed === 1 ? null : { ...(await voiceSettings(voiceId)), speed };
+
   const response = await call(
     `/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`,
     {
@@ -199,7 +254,7 @@ export async function speak(
         ...(takesLanguageCode(model) ? { language_code: language } : {}),
         // Left out entirely at the default, so the voice keeps whatever
         // settings it was saved with.
-        ...(speed === 1 ? {} : { voice_settings: { speed } }),
+        ...(settings ? { voice_settings: settings } : {}),
       }),
     },
   );

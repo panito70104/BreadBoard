@@ -54,6 +54,14 @@ const MIN_STEP_SECONDS = 0.5;
  * long ones are simply taken fast.
  */
 export const STEP_GAP_SECONDS = 0.45;
+/**
+ * The longest a scene may open on an empty board before drawing anyway.
+ *
+ * A hand that leads the words by a beat reads as a person drawing. Six seconds
+ * of blank whiteboard reads as a broken video, so the first drawing of a scene
+ * never waits longer than this for its cue.
+ */
+const MAX_LEAD_IN_SECONDS = 1.2;
 /** How far the drawing may be rushed before the gaps start giving way too. */
 const MIN_DRAW_SCALE = 0.55;
 const MIN_GAP_SCALE = 0.4;
@@ -131,6 +139,51 @@ function startRatio(scene: StoryboardScene, step: StoryboardStep, index: number)
   return found ?? (scene.steps.length === 1 ? 0 : (index / scene.steps.length) * 0.9);
 }
 
+/**
+ * The order the steps are really drawn in.
+ *
+ * `at` is measured off the voice; the order the model listed the steps in is a
+ * guess, and the two disagree often. A model naturally writes the title first
+ * even when its phrase is spoken six seconds into the scene, and puts the
+ * picture it illustrates third even though that one is cued immediately.
+ *
+ * Taking the array order as gospel then clamps every earlier step forward onto
+ * the late one, because a scene cannot draw backwards — which opens the scene
+ * on a blank board and drags everything after it late. So when the voice knows
+ * the chronology, the voice decides it.
+ *
+ * An `emphasis` aimed at `prev` travels with the step in front of it: its
+ * target is a neighbour rather than a slot, so it has to stay one. Steps cued
+ * at the same second keep the order they were written in.
+ *
+ * Left alone unless every step has a measured `at`. A scene where only some
+ * phrases were found is guessing about the rest, and guesses are not worth
+ * reordering a board for.
+ */
+function drawingOrder(steps: StoryboardStep[]): number[] {
+  const asWritten = steps.map((_, index) => index);
+  if (steps.length < 2 || !steps.every((step) => step.at !== undefined)) return asWritten;
+
+  // Runs that have to stay adjacent: a step plus whatever points back at it.
+  const runs: number[][] = [];
+  for (const [index, step] of steps.entries()) {
+    const pointsAtPrevious =
+      step.draw.type === "emphasis" && step.draw.target === "prev" && runs.length > 0;
+    if (pointsAtPrevious) runs[runs.length - 1].push(index);
+    else runs.push([index]);
+  }
+
+  return runs
+    .map((run, written) => ({
+      run,
+      written,
+      // A run goes where its earliest spoken step goes.
+      at: Math.min(...run.map((index) => steps[index].at ?? Infinity)),
+    }))
+    .sort((a, b) => a.at - b.at || a.written - b.written)
+    .flatMap((entry) => entry.run);
+}
+
 function buildScene(
   scene: StoryboardScene,
   from: number,
@@ -138,19 +191,27 @@ function buildScene(
   approach?: number[],
 ): TimedScene {
   const durationInFrames = Math.round(scene.durationSeconds * BOARD.fps);
-  const count = scene.steps.length;
+
+  // Drawing order, which is the voice's order when it has one. Every array
+  // below is indexed by position in it; `index` stays the step's own place in
+  // the storyboard, so a step keeps its identity when the order changes.
+  const ordered = drawingOrder(scene.steps).map((index) => ({
+    step: scene.steps[index],
+    index,
+  }));
+  const count = ordered.length;
 
   // Preferred start of each step, as a fraction of the scene.
-  const ratios = scene.steps.map((step, index) => startRatio(scene, step, index));
+  const ratios = ordered.map(({ step }, position) => startRatio(scene, step, position));
 
   // What each step wants. `natural` is what the pen schedule measured on the
   // real geometry; the estimate is only used on the first pass, before any
   // geometry exists. Likewise `approach` is the real distance the hand has to
   // cover to get there, and the flat gap is only a stand-in for it.
-  const wanted = scene.steps.map((step, index) =>
-    Math.max(MIN_STEP_SECONDS, natural?.[index] || drawSeconds(step.draw)),
+  const wanted = ordered.map(({ step }, position) =>
+    Math.max(MIN_STEP_SECONDS, natural?.[position] || drawSeconds(step.draw)),
   );
-  const gaps = scene.steps.map((_, index) => approach?.[index] ?? STEP_GAP_SECONDS);
+  const gaps = ordered.map((_, position) => approach?.[position] ?? STEP_GAP_SECONDS);
 
   const drawTotal = wanted.reduce((sum, value) => sum + value, 0);
   const gapTotal = gaps.reduce((sum, value) => sum + value, 0);
@@ -189,20 +250,53 @@ function buildScene(
    * demand instead: each step gets the room it needs and is pushed later when
    * the one before it has not finished.
    */
-  const voiced = scene.steps.some((step) => step.at !== undefined);
+  const voiced = ordered.some(({ step }) => step.at !== undefined);
   const starts: number[] = [];
 
   if (voiced) {
     let previous = 0;
     for (let index = 0; index < count; index += 1) {
-      // Never before the step before it — an `at` out of order means the phrase
-      // matched in the wrong place, not that the drawing should go backwards.
-      const start = Math.min(
-        scene.durationSeconds,
-        Math.max(previous, ratios[index] * scene.durationSeconds),
-      );
+      const cue = ratios[index] * scene.durationSeconds;
+      const start =
+        index === 0
+          ? // A scene does not open on an empty board, whatever it is cued on.
+            Math.min(cue, MAX_LEAD_IN_SECONDS)
+          : // Never before the step before it — an `at` out of order means the
+            // phrase matched in the wrong place, not that the drawing should go
+            // backwards.
+            Math.min(scene.durationSeconds, Math.max(previous, cue));
       starts.push(start);
       previous = start;
+    }
+
+    /**
+     * Two steps cued on the same words both land on the same second — a title
+     * and the underline beneath it usually quote the same phrase — and a step
+     * whose neighbour starts when it does has no room at all: it falls to the
+     * floor below and pops onto the board fully formed instead of being drawn.
+     *
+     * So each run of identical cues is spread across the time before the next
+     * distinct one. They still begin together with the words; they just stop
+     * being simultaneous with each other. A run with more demand than room
+     * stays stacked and is drawn fast, which is the lesser evil.
+     */
+    for (let index = 0; index < count; ) {
+      let end = index + 1;
+      while (end < count && starts[end] === starts[index]) end += 1;
+
+      if (end - index > 1) {
+        const room = (end < count ? starts[end] : scene.durationSeconds) - starts[index];
+        const demand = wanted.slice(index, end).reduce((sum, value) => sum + value, 0);
+        const share = Math.min(1, room / demand);
+
+        let cursor = starts[index];
+        for (let at = index; at < end; at += 1) {
+          starts[at] = cursor;
+          cursor += wanted[at] * share;
+        }
+      }
+
+      index = end;
     }
   } else {
     let cursor = 0;
@@ -231,7 +325,7 @@ function buildScene(
     }
   }
 
-  const steps: TimedStep[] = scene.steps.map((step, index) => {
+  const steps: TimedStep[] = ordered.map(({ step, index: written }, index) => {
     const startFrame = from + Math.round(starts[index] * BOARD.fps);
     const nextFrame =
       index + 1 < count
@@ -255,7 +349,7 @@ function buildScene(
 
     return {
       step,
-      index,
+      index: written,
       from: startFrame,
       // Never longer than the drawing wants. A step with room to spare
       // finishes and the hand waits, which is what a person does.

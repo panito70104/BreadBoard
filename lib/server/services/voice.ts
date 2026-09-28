@@ -31,7 +31,7 @@
 import "server-only";
 
 import { objectKey, putObject } from "@/lib/server/storage";
-import { phraseStart } from "@/lib/server/voice/align";
+import { phraseTimes } from "@/lib/server/voice/align";
 import {
   TOLERANCE,
   paceFor,
@@ -130,11 +130,18 @@ async function assemble(
   const key = objectKey(target.ownerId, target.videoId, `voz-${scene.index}.mp3`);
   await putObject("videos", key, speech.audio, "audio/mpeg");
 
+  // Read in drawing order, so two steps quoting the same phrase get the first
+  // and second time it is said rather than both getting the first.
+  const spokenAt = phraseTimes(
+    speech.alignment,
+    scene.steps.map((step) => step.on),
+  );
+
   return {
     ...scene,
     // Each step now knows its own second rather than its share of the scene.
-    steps: scene.steps.map((step) => {
-      const at = step.on ? phraseStart(speech.alignment, step.on) : null;
+    steps: scene.steps.map((step, index) => {
+      const at = spokenAt[index];
       return at === null ? step : { ...step, at };
     }),
     durationSeconds: sceneSeconds(speech.durationSeconds),

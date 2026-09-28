@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/server/auth/dal";
 import { notFound } from "@/lib/server/errors";
 import { route } from "@/lib/server/http";
 import { getOwnedVideoRow } from "@/lib/server/services/videos";
-import { getObjectBytes } from "@/lib/server/storage";
+import { RangeNotSatisfiable, getObjectRange } from "@/lib/server/storage";
 
 /**
  * The voice-over for one scene, streamed.
@@ -24,6 +24,11 @@ import { getObjectBytes } from "@/lib/server/storage";
  * So the bytes come through here, from one stable URL, with range support and
  * a cache header. The `v` in the URL changes when the audio does, which is what
  * makes caching safe across a regeneration.
+ *
+ * The range is answered by storage rather than by slicing a full download —
+ * see `getObjectRange`. Fetching the whole mp3 to hand back four kilobytes of
+ * it is the same stall by another route, and it also held the entire file in
+ * this process's memory once per request.
  */
 export const GET = route<RouteContext<"/api/videos/[id]/audio/[scene]">>(
   async (request, { params }) => {
@@ -34,41 +39,34 @@ export const GET = route<RouteContext<"/api/videos/[id]/audio/[scene]">>(
     const scene = video.storyboard?.scenes.find((entry) => entry.id === sceneId);
     if (!scene?.audio) throw notFound("Esa escena no tiene voz.");
 
-    const bytes = await getObjectBytes("videos", scene.audio.key);
-    const total = bytes.byteLength;
+    let slice;
+    try {
+      slice = await getObjectRange("videos", scene.audio.key, request.headers.get("range"));
+    } catch (cause) {
+      if (cause instanceof RangeNotSatisfiable) {
+        return new NextResponse(null, {
+          status: 416,
+          headers: { "content-range": `bytes */${cause.total ?? 0}` },
+        });
+      }
+      throw cause;
+    }
 
     const headers = new Headers({
       "content-type": "audio/mpeg",
       "accept-ranges": "bytes",
+      "content-length": String(slice.bytes.byteLength),
       // Private: the URL is only reachable by the owner anyway, and the browser
       // needs to keep it to seek without going back to the network.
       "cache-control": "private, max-age=600",
       etag: `"${scene.audio.key}-${scene.audio.durationSeconds}"`,
     });
 
-    const range = request.headers.get("range");
-    const match = range?.match(/^bytes=(\d*)-(\d*)$/);
-
-    if (match) {
-      const start = match[1] ? Number(match[1]) : 0;
-      const end = match[2] ? Math.min(Number(match[2]), total - 1) : total - 1;
-
-      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= total) {
-        return new NextResponse(null, {
-          status: 416,
-          headers: { "content-range": `bytes */${total}` },
-        });
-      }
-
-      headers.set("content-range", `bytes ${start}-${end}/${total}`);
-      headers.set("content-length", String(end - start + 1));
-      return new NextResponse(bytes.slice(start, end + 1) as BodyInit, {
-        status: 206,
-        headers,
-      });
+    if (!slice.partial) {
+      return new NextResponse(slice.bytes as BodyInit, { status: 200, headers });
     }
 
-    headers.set("content-length", String(total));
-    return new NextResponse(bytes as BodyInit, { status: 200, headers });
+    headers.set("content-range", `bytes ${slice.start}-${slice.end}/${slice.total}`);
+    return new NextResponse(slice.bytes as BodyInit, { status: 206, headers });
   },
 );

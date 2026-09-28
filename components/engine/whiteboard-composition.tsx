@@ -128,6 +128,17 @@ export function WhiteboardComposition({
             key={`voz-${timed.scene.id}`}
             from={timed.from}
             durationInFrames={timed.durationInFrames}
+            /*
+              A Sequence renders nothing outside its own range, so each scene's
+              <Audio> is mounted at the very frame it has to start speaking —
+              with no time to load. The element then plays late, the clock walks
+              on without it, and the drift correction below pulls it back over
+              audio it has already played.
+
+              Premounting mounts it a second early instead, muted and hidden,
+              so the file is loaded and seekable before the first word is due.
+            */
+            premountFor={BOARD.fps}
           >
             {/*
               Without this the Player keeps advancing frames while the audio
