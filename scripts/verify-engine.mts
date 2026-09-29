@@ -533,9 +533,78 @@ for (const id of FASE1_IDS) {
   inspect(`fixture ${id.toUpperCase()}`, planStoryboard(FASE1_FIXTURES[id]).plans);
 }
 
-// The x-height is what decides whether a label reads at a glance, and it is
-// roughly half the type size in a handwriting face.
-const X_RATIO = 0.5;
+/* --------------------------- the freehand stroke -------------------------- */
+
+/*
+ * Invariant 4, for the one thing in the engine that now builds geometry per
+ * frame instead of once per scene.
+ *
+ * Remotion renders frames in parallel and out of order, so a stroke outline has
+ * to be a function of the frame and nothing else — not of the frame before it,
+ * and not of whether the cache happens to be warm. This walks a scene's frames
+ * backwards and compares every outline against the same frame computed on a
+ * cold cache.
+ */
+const { clearOutlineCache, freehandOutline } = await import("@/lib/engine/freehand");
+const { penProgress: penProgressOf, penStateAt: penStateOf } = await import("@/lib/engine/pen");
+const { visibleSteps } = await import("@/lib/engine/plan");
+
+let outlinesChecked = 0;
+
+{
+  const plan = planStoryboard(FASE1_FIXTURES.c).plans[0];
+  const { from, durationInFrames } = plan.scene;
+
+  const outlinesAt = (frame: number) => {
+    const stage = stageAt(frame, plan, BOARD.fps);
+    const drawn: string[] = [];
+    for (const placed of visibleSteps(plan, frame)) {
+      const slices =
+        frame >= endFrameOf(placed, BOARD.fps)
+          ? undefined
+          : placed === stage.active
+            ? stage.pen?.slices
+            : penStateOf(
+                placed.pen,
+                penProgressOf(frame, placed.timed, placed.pen, BOARD.fps),
+              ).slices;
+      placed.parts.forEach((part, index) => {
+        if (part.kind !== "strokes") return;
+        part.paths.forEach((d, pathIndex) => {
+          const share = slices?.[index]?.[pathIndex] ?? 1;
+          if (share <= 0) return;
+          drawn.push(
+            freehandOutline(d, share, {
+              width: part.strokeWidth,
+              unitScale: part.frame.w / (part.viewBox.w || 1),
+              seconds: placed.pen.strokeSeconds[index]?.[pathIndex] ?? 0.2,
+            }),
+          );
+        });
+      });
+    }
+    return drawn;
+  };
+
+  // Backwards, on a cache warmed by nothing in particular.
+  const reverse = new Map<number, string[]>();
+  for (let frame = from + durationInFrames - 1; frame >= from; frame -= 4) {
+    reverse.set(frame, outlinesAt(frame));
+  }
+
+  for (const [frame, expected] of reverse) {
+    clearOutlineCache();
+    const fresh = outlinesAt(frame);
+    outlinesChecked += fresh.length;
+    check(
+      fresh.length === expected.length && fresh.every((d, i) => d === expected[i]),
+      `f${frame}: el trazo freehand no es función pura del frame`,
+    );
+  }
+}
+
+// The x-height of the handwriting face, measured — see `lib/engine/text.ts`.
+const X_RATIO = 0.357;
 
 /* -------------------------------- report --------------------------------- */
 
@@ -563,6 +632,7 @@ console.log(
   `(~${(looks.minText * X_RATIO).toFixed(0)}px de altura de x)`,
   looks.minTextWhere,
 );
+console.log("  contornos freehand comprobados como puros:", outlinesChecked);
 console.log("  degradaciones de énfasis:", looks.degraded.length);
 for (const note of looks.degraded) console.log("   ·", note);
 

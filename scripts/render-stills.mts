@@ -40,8 +40,13 @@ function flag(name: string): string | undefined {
 
 const outDir = path.resolve(ROOT, flag("out") ?? "verification/fase1/before");
 const only = flag("only")?.split(",").map((value) => value.trim()).filter(Boolean);
-/** Suffix for the file name, so two stroke styles can sit side by side. */
-const suffix = flag("suffix") ?? "";
+/** Which way lines are drawn: "rough" (the default) or "freehand". */
+const strokeStyle = flag("stroke-style") ?? "rough";
+/**
+ * Suffix for the file name, so two stroke styles can sit side by side.
+ * Defaults to the stroke style when it is not the usual one.
+ */
+const suffix = flag("suffix") ?? (strokeStyle === "rough" ? "" : `-${strokeStyle}`);
 
 /* ------------------------- which frames to capture ------------------------- */
 
@@ -111,7 +116,7 @@ const serveUrl = await bundle({
 
 let failed = 0;
 for (const shot of shots) {
-  const inputProps = { storyboard: shot.storyboard, style: "classic-whiteboard" };
+  const inputProps = { storyboard: shot.storyboard, style: "classic-whiteboard", strokeStyle };
   const output = path.join(outDir, `${shot.name}.png`);
 
   try {

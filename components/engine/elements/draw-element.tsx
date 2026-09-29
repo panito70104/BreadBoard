@@ -10,6 +10,7 @@
  */
 
 import { HAND_FONT, type BoardTheme } from "@/lib/engine/board";
+import { DEFAULT_STROKE_STYLE, type StrokeStyle } from "@/lib/engine/freehand";
 import type { PlacedStep } from "@/lib/engine/plan";
 import type { MarkColor } from "@/types/storyboard";
 
@@ -20,11 +21,13 @@ export function DrawElementView({
   placed,
   slices,
   theme,
+  strokeStyle = DEFAULT_STROKE_STYLE,
 }: {
   placed: PlacedStep;
   /** Per part, how much of each path or word is inked. Omit when fully drawn. */
   slices?: number[][];
   theme: BoardTheme;
+  strokeStyle?: StrokeStyle;
 }) {
   const { element } = placed;
   if (element.type === "erase") return null;
@@ -71,6 +74,9 @@ export function DrawElementView({
               viewBox={`0 0 ${part.viewBox.w} ${part.viewBox.h}`}
               width={part.frame.w}
               height={part.frame.h}
+              strokeStyle={strokeStyle}
+              strokeSeconds={placed.pen.strokeSeconds[index]}
+              unitScale={part.frame.w / (part.viewBox.w || 1)}
             />
           </div>
         );

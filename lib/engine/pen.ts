@@ -85,6 +85,16 @@ export interface PenPlan {
   seconds: number;
   /** Progress values each part needs: one per path, or one per word. */
   sliceCounts: number[];
+  /**
+   * Seconds each individual stroke gets, per part, per path.
+   *
+   * The renderer needs it to draw a line whose thickness follows the speed of
+   * the tip. It is published from here rather than worked out again next to the
+   * ink for the usual reason: two calculations of the same thing eventually
+   * disagree, and then the marker is thick where the hand is moving fast.
+   * Empty for text parts, which are written rather than stroked.
+   */
+  strokeSeconds: number[][];
 }
 
 export interface PenState {
@@ -100,7 +110,7 @@ export interface PenState {
   slices: number[][];
 }
 
-export const EMPTY_PEN: PenPlan = { events: [], seconds: 0, sliceCounts: [] };
+export const EMPTY_PEN: PenPlan = { events: [], seconds: 0, sliceCounts: [], strokeSeconds: [] };
 
 /* -------------------------------------------------------------------------- */
 /*                                   Units                                    */
@@ -109,6 +119,8 @@ export const EMPTY_PEN: PenPlan = { events: [], seconds: 0, sliceCounts: [] };
 /** One uninterrupted piece of drawing: a path, or a written line. */
 interface Unit {
   part: number;
+  /** Which slice of the part this is: a path index, or a row of writing. */
+  slice: number;
   seconds: number;
   start: Point;
   end: Point;
@@ -139,6 +151,7 @@ function strokeUnits(part: StrokePart, index: number): Unit[] {
 
     return {
       part: index,
+      slice: pathIndex,
       seconds: Math.max(MIN_STROKE_SECONDS, (sampled.length * scale) / DRAW_SPEED),
       start: at(0),
       end: at(1),
@@ -168,7 +181,7 @@ function textUnits(part: TextPart, index: number): Unit[] {
   const { layout } = part;
   const baseline = layout.lineHeight * WRITING_LINE;
 
-  return layout.rows.map((row) => {
+  return layout.rows.map((row, rowIndex) => {
     const words = row.words.map((wordIndex) => layout.words[wordIndex]);
     const weights = words.map((word) => Math.max(1, word.text.length) + SPACE_WEIGHT);
     const total = weights.reduce((sum, value) => sum + value, 0) || 1;
@@ -205,6 +218,7 @@ function textUnits(part: TextPart, index: number): Unit[] {
 
     return {
       part: index,
+      slice: rowIndex,
       seconds: Math.max(MIN_LINE_SECONDS, total * WRITE_SECONDS),
       start: at(0),
       end: at(1),
@@ -228,12 +242,20 @@ function textUnits(part: TextPart, index: number): Unit[] {
 export function planPen(parts: Part[]): PenPlan {
   const units: Unit[] = [];
   const sliceCounts = parts.map(sliceCount);
+  const strokeSeconds = parts.map((part) =>
+    part.kind === "strokes" ? new Array<number>(part.paths.length).fill(0) : [],
+  );
 
   parts.forEach((part, index) => {
     units.push(
       ...(part.kind === "text" ? textUnits(part, index) : strokeUnits(part, index)),
     );
   });
+
+  for (const unit of units) {
+    const row = strokeSeconds[unit.part];
+    if (row.length > unit.slice) row[unit.slice] = unit.seconds;
+  }
 
   const events: PenEvent[] = [];
   let at = 0;
@@ -270,7 +292,7 @@ export function planPen(parts: Part[]): PenPlan {
     tip = unit.end;
   }
 
-  return { events, seconds: at, sliceCounts };
+  return { events, seconds: at, sliceCounts, strokeSeconds };
 }
 
 /** Every slice inked — what a step that finished drawing looks like. */

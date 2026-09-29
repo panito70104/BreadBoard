@@ -19,6 +19,7 @@ import { Hand } from "@/components/engine/hand";
 import { DrawElementView } from "@/components/engine/elements/draw-element";
 import { BOARD, BOARD_THEMES } from "@/lib/engine/board";
 import { cameraAt } from "@/lib/engine/camera";
+import { DEFAULT_STROKE_STYLE, type StrokeStyle } from "@/lib/engine/freehand";
 import { endFrameOf, stageAt, type StageState } from "@/lib/engine/hand-motion";
 import { penProgress, penStateAt } from "@/lib/engine/pen";
 import { planStoryboard, visibleSteps, type PlacedStep, type ScenePlan } from "@/lib/engine/plan";
@@ -40,6 +41,16 @@ export interface WhiteboardCompositionProps {
    * frames the scene occupies. A scene with no entry plays silent.
    */
   audioUrls?: Record<string, string>;
+  /**
+   * How a line is drawn.
+   *
+   * `"rough"` strokes each path at one width, which is what the board has
+   * always done. `"freehand"` gives the line a marker's varying thickness,
+   * driven by the speed the pen schedule moves the tip at. Behind a flag so the
+   * two can be put side by side; the old path is not going anywhere until the
+   * new one has earned it.
+   */
+  strokeStyle?: StrokeStyle;
 }
 
 /** Faint ruling under the content, per style. */
@@ -78,6 +89,7 @@ export function WhiteboardComposition({
   style,
   handFamily,
   audioUrls,
+  strokeStyle = DEFAULT_STROKE_STYLE,
 }: WhiteboardCompositionProps) {
   const frame = useCurrentFrame();
   const theme = BOARD_THEMES[style];
@@ -166,6 +178,7 @@ export function WhiteboardComposition({
             placed={placed}
             slices={slicesFor(placed, stage, frame)}
             theme={theme}
+            strokeStyle={strokeStyle}
           />
         ))}
 
