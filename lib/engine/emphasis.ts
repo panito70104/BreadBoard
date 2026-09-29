@@ -188,7 +188,7 @@ function shapePaths(
     }
 
     case "box":
-      return roughRect(x - pad, y - pad, w + pad * 2, h + pad * 2, { roughness: 0.8 });
+      return roughRect(x - pad, y - pad, w + pad * 2, h + pad * 2);
 
     case "circle": {
       // A long, low target cannot be ringed without the ring becoming a band.
@@ -198,7 +198,7 @@ function shapePaths(
         y + h / 2,
         (w / 2) * CIRCLE_GROW + pad,
         (h / 2) * CIRCLE_GROW + pad,
-        { roughness: 0.8, bowing: 0.9 },
+        { bowing: 0.9 },
       );
     }
 

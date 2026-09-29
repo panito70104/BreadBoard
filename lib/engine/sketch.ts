@@ -71,7 +71,9 @@ type Point = [number, number];
 
 function iconPart(id: string, frame: Box, color?: MarkColor): StrokePart {
   const paths = orderPaths(ICON_PATHS[id] ?? []).flatMap((d) =>
-    roughPath(d, { roughness: 0.5, bowing: 0.6, strokeWidth: 0.9 }),
+    // The paths are on the 24-unit grid and end up `frame.w` wide, so the
+    // wobble has to be asked for in board pixels rather than in grid units.
+    roughPath(d, { unitScale: frame.w / ICON_VIEWBOX, bowing: 0.6, strokeWidth: 0.9 }),
   );
   return {
     kind: "strokes",

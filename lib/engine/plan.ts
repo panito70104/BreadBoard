@@ -183,7 +183,7 @@ function measureBullet(
           : {
               kind: "strokes",
               paths: roughPath(BULLET_GLYPHS[element.marker ?? "dot"] ?? BULLET_GLYPHS.dot, {
-                roughness: 0.4,
+                unitScale: markerSize / ICON_VIEWBOX,
                 bowing: 0.3,
               }),
               viewBox: { w: ICON_VIEWBOX, h: ICON_VIEWBOX },
@@ -232,7 +232,7 @@ function buildVisual(element: VisualElement, region: Box, scale: number) {
   // Ordered before Rough.js expands each path, so the hand works its way
   // around the shape instead of hopping across it in the designer's order.
   const paths = orderPaths(ICON_PATHS[element.id] ?? []).flatMap((d) =>
-    roughPath(d, { roughness: 0.5, bowing: 0.6, strokeWidth: 0.9 }),
+    roughPath(d, { unitScale: size / ICON_VIEWBOX, bowing: 0.6, strokeWidth: 0.9 }),
   );
   const parts: Part[] = [
     {
