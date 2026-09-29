@@ -33,9 +33,11 @@ installDom();
 const { generateStoryboard } = await import("@/lib/storyboard/generate");
 const { fitToDuration } = await import("@/lib/storyboard/fit");
 const { UsageLedger } = await import("@/lib/storyboard/usage");
+const { planVisuals, ArtDirectionError } = await import("@/lib/storyboard/art-direction");
 
 type Storyboard = import("@/types/storyboard").Storyboard;
 type StoryboardWarning = import("@/types/storyboard").StoryboardWarning;
+type VisualPlan = import("@/types/art-direction").VisualPlan;
 
 /* ------------------------------- arguments -------------------------------- */
 
@@ -46,10 +48,12 @@ function flag(name: string): string | undefined {
 
 const docs = (flag("doc") ?? "").split(",").map((v) => v.trim()).filter(Boolean);
 const outDir = path.resolve(ROOT, flag("out") ?? "verification/fase2/before");
+/** Run the art director first. Off reproduces the pipeline as it was. */
+const withPlan = process.argv.includes("--plan");
 const prompt = flag("prompt");
 
 if (docs.length === 0) {
-  console.error("Uso: --doc <archivo>[,<archivo>] [--out <dir>]");
+  console.error("Uso: --doc <archivo>[,<archivo>] [--out <dir>] [--plan]");
   process.exit(1);
 }
 
@@ -103,6 +107,47 @@ function summarize(storyboard: Storyboard, warnings: StoryboardWarning[]): strin
   return lines.join("\n");
 }
 
+function planSummary(plan: VisualPlan): string {
+  const drawing = (member: VisualPlan["cast"][number]) =>
+    member.drawWith.kind === "icon"
+      ? `icono \`${member.drawWith.icon}\``
+      : member.drawWith.kind === "sketch"
+        ? `sketch [${member.drawWith.icons.join(" ")}] rel=${member.drawWith.relation}`
+        : `diagram \`${member.drawWith.diagram}\``;
+
+  const lines = [
+    `# Plan visual — ${plan.metaphor.name}`,
+    "",
+    `**Por qué:** ${plan.metaphor.why}`,
+    "",
+    "## Reparto",
+    "",
+    ...plan.cast.map((member) => `- **${member.id}** — ${member.means} → ${drawing(member)}`),
+    "",
+    "## Roles y colores",
+    "",
+    ...plan.roles.map((role) => `- **${role.role}** → \`${role.color}\` — ${role.why}`),
+    "",
+    "## Escenas",
+    "",
+  ];
+
+  plan.scenes.forEach((scene, index) => {
+    lines.push(`### ${index + 1}. ${scene.claim}`, "");
+    lines.push(`**Debe verse:** ${scene.mustShow}`, "");
+    lines.push(`**Reparto:** ${scene.usesCast.join(", ") || "(ninguno)"}`, "");
+  });
+
+  lines.push("## Carencias", "");
+  if (plan.gaps.length === 0) lines.push("_(ninguna)_", "");
+  for (const gap of plan.gaps) {
+    lines.push(`- \`${gap.kind}\` **${gap.want}** → usó: ${gap.fallback}`);
+  }
+  lines.push("");
+
+  return lines.join("\n");
+}
+
 /* ---------------------------------- run ----------------------------------- */
 
 await mkdir(outDir, { recursive: true });
@@ -116,7 +161,7 @@ for (const doc of docs) {
   const text = await readFile(file, "utf8");
   const words = text.split(/\s+/).filter(Boolean).length;
 
-  console.log(`\n=== ${name} (${words} palabras)`);
+  console.log(`\n=== ${name} (${words} palabras)${withPlan ? " · con plan visual" : ""}`);
 
   const request = {
     documentText: text,
@@ -127,6 +172,26 @@ for (const doc of docs) {
     documentWords: words,
     style: "classic-whiteboard" as const,
   };
+
+  let plan: VisualPlan | null = null;
+  if (withPlan) {
+    try {
+      plan = await planVisuals(request, {
+        client,
+        usage: ledger.sink,
+        onWarning: (message) => console.warn(`    plan: ${message}`),
+      });
+      console.log(
+        `  plan: "${plan.metaphor.name}" · ${plan.cast.length} piezas · ${plan.roles.length} roles · ${plan.scenes.length} escenas · ${plan.gaps.length} carencias`,
+      );
+      await writeFile(path.join(outDir, `${name}.plan.json`), JSON.stringify(plan, null, 2));
+      await writeFile(path.join(outDir, `${name}.plan.md`), planSummary(plan));
+    } catch (error) {
+      // Invariant 5: a plan that fails never stops a generation.
+      if (!(error instanceof ArtDirectionError)) throw error;
+      console.warn(`  plan falló (${(error as Error).message}); se sigue sin él`);
+    }
+  }
 
   const result = await generateStoryboard(request, { client, usage: ledger.sink });
 
