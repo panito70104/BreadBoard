@@ -20,18 +20,12 @@ import { ICON_PATHS, ICON_VIEWBOX } from "@/data/icon-paths";
 import { FONT_SIZE, HAND_FONT, slotBox, type Box } from "@/lib/engine/board";
 import { planCamera, type CameraKey } from "@/lib/engine/camera";
 import { diagramParts } from "@/lib/engine/diagrams";
+import { planEmphasis, type EmphasisTarget } from "@/lib/engine/emphasis";
+import { inkOrRegion, lastWritingLine, textRowBounds } from "@/lib/engine/ink-bounds";
 import { boardStrokes, type Part } from "@/lib/engine/parts";
 import { orderPaths } from "@/lib/engine/path-sampling";
 import { planPen, type PenPlan } from "@/lib/engine/pen";
-import {
-  roughArrowhead,
-  roughEllipse,
-  roughLine,
-  roughPath,
-  roughPolyline,
-  roughQuadratic,
-  roughRect,
-} from "@/lib/engine/rough";
+import { roughArrowhead, roughPath, roughPolyline } from "@/lib/engine/rough";
 import { sketchParts } from "@/lib/engine/sketch";
 import { layoutText } from "@/lib/engine/text";
 import { approachSeconds } from "@/lib/engine/hand-motion";
@@ -45,7 +39,6 @@ import {
 import type {
   BulletElement,
   DrawElement,
-  EmphasisElement,
   SceneLayout,
   Slot,
   Storyboard,
@@ -215,11 +208,17 @@ function measureBullet(
 /* -------------------------------------------------------------------------- */
 
 function buildVisual(element: VisualElement, region: Box, scale: number) {
+  // The bounds are the ink, never the region. A drawing centred in a tall slot
+  // leaves hundreds of empty pixels above and below it, and anything that
+  // points at the region — emphasis, arrows, the camera — points at that empty
+  // space instead of at the drawing.
   if (element.type === "diagram") {
-    return { parts: diagramParts(element, region, scale), bounds: region };
+    const parts = diagramParts(element, region, scale);
+    return { parts, bounds: inkOrRegion(parts, region) };
   }
   if (element.type === "sketch") {
-    return { parts: sketchParts(element, region, scale), bounds: region };
+    const parts = sketchParts(element, region, scale);
+    return { parts, bounds: inkOrRegion(parts, region) };
   }
 
   const wanted = Math.min(1.3, Math.max(0.4, element.scale ?? 1));
@@ -247,7 +246,9 @@ function buildVisual(element: VisualElement, region: Box, scale: number) {
       color: element.color ?? undefined,
     },
   ];
-  return { parts, bounds: frame };
+  // Few icons fill their 24-unit grid; most sit inside it with a margin, so the
+  // frame is a little larger than the drawing in it.
+  return { parts, bounds: inkOrRegion(parts, frame) };
 }
 
 /** Drawings that explain deserve more room than one sharing their slot. */
@@ -336,28 +337,26 @@ function arrangeSlot(region: Box, items: SlotItem[]) {
 /*                            Emphasis and arrows                             */
 /* -------------------------------------------------------------------------- */
 
-function emphasisPaths(element: EmphasisElement, target: Box): string[] {
-  const pad = 16;
-  const { x, y, w, h } = target;
-  switch (element.shape) {
-    case "underline":
-      return roughLine(x - 6, y + h + 2, x + w + 10, y + h + 6, { bowing: 2.6 });
-    case "strike":
-      return roughLine(x - 4, y + h / 2, x + w + 4, y + h / 2);
-    case "box":
-      return roughRect(x - pad, y - pad, w + pad * 2, h + pad * 2);
-    case "circle":
-      // An ellipse only contains a rectangle's corners at ~√2 its half-sides.
-      return roughEllipse(x + w / 2, y + h / 2, (w / 2) * 1.2 + pad, (h / 2) * 1.45 + pad);
-    case "brace": {
-      const left = x - pad;
-      const top = y - pad / 2;
-      const bottom = y + h + pad / 2;
-      return roughQuadratic([left + 26, top], [left - 6, (top + bottom) / 2], [left + 26, bottom], {
-        bowing: 0.4,
-      });
-    }
+/**
+ * What an emphasis is pointing at: the ink, plus the last row of writing in it
+ * if there is any, which is what an underline or a strike has to hug.
+ */
+function emphasisTarget(parts: Part[], fallback: Box): EmphasisTarget {
+  const ink = inkOrRegion(parts, fallback);
+
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const part = parts[i];
+    if (part.kind !== "text") continue;
+    const rows = textRowBounds(part);
+    const last = rows[rows.length - 1];
+    if (!last) continue;
+    return {
+      ink,
+      row: { box: last, writingLine: lastWritingLine(part), fontSize: part.fontSize },
+    };
   }
+
+  return { ink };
 }
 
 function arrowPaths(from: Box, to: Box): string[] {
@@ -416,7 +415,10 @@ export function planScene(scene: TimedScene): ScenePlan {
 
   // 2. Walk in time order: emphasis and arrows point at ink drawn so far.
   const inkBySlot = new Map<Slot, Box>();
+  const partsBySlot = new Map<Slot, Part[]>();
   let lastInk: Box | null = null;
+  let lastParts: Part[] = [];
+  let lastDrawnSlot: Slot | null = null;
 
   const steps = scene.steps.map((timed, index): PlacedStep => {
     const element = timed.step.draw;
@@ -429,14 +431,34 @@ export function planScene(scene: TimedScene): ScenePlan {
       bounds = placed.bounds;
       const slot = slotOf(element);
       inkBySlot.set(slot, union(inkBySlot.get(slot), bounds));
+      partsBySlot.set(slot, [...(partsBySlot.get(slot) ?? []), ...placed.parts]);
       lastInk = bounds;
+      lastParts = placed.parts;
+      lastDrawnSlot = slot;
     } else if (element.type === "emphasis") {
+      const owned: Slot | null = element.target === "prev" ? null : element.target;
       const target =
         element.target === "prev"
-          ? (lastInk ?? slotBox(layout, "title"))
-          : (inkBySlot.get(element.target) ?? slotBox(layout, element.target));
-      parts = [boardStrokes(emphasisPaths(element, target), element.shape === "underline" ? 7 : 5)];
-      bounds = target;
+          ? emphasisTarget(lastParts, lastInk ?? slotBox(layout, "title"))
+          : emphasisTarget(
+              partsBySlot.get(element.target) ?? [],
+              inkBySlot.get(element.target) ?? slotBox(layout, element.target),
+            );
+
+      // Everything already on the board that this shape has no business
+      // touching. For a `prev` target that is every slot's ink except the one
+      // the previous step drew into; for a named slot it is every other slot.
+      const avoid: Box[] = [];
+      for (const [slot, box] of inkBySlot) {
+        if (owned !== null && slot === owned) continue;
+        if (owned === null && lastInk && slot === lastDrawnSlot) continue;
+        avoid.push(box);
+      }
+
+      const planned = planEmphasis(element.shape, { target, avoid }, element.color);
+      parts = planned.parts;
+      bounds = planned.bounds;
+      if (planned.warning) warnings.push(`escena ${scene.scene.index}: ${planned.warning}`);
     } else if (element.type === "arrow") {
       const from =
         inkBySlot.get(element.from) ?? plannedInk.get(element.from) ?? slotBox(layout, element.from);
@@ -448,9 +470,16 @@ export function planScene(scene: TimedScene): ScenePlan {
         element.scope === "board"
           ? { x: 0, y: 0, w: 1920, h: 1080 }
           : slotBox(layout, element.scope);
-      if (element.scope === "board") inkBySlot.clear();
-      else inkBySlot.delete(element.scope);
+      if (element.scope === "board") {
+        inkBySlot.clear();
+        partsBySlot.clear();
+      } else {
+        inkBySlot.delete(element.scope);
+        partsBySlot.delete(element.scope);
+      }
       lastInk = null;
+      lastParts = [];
+      lastDrawnSlot = null;
     }
 
     return { timed, element, parts, pen: planPen(parts), bounds };
