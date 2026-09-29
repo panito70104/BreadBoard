@@ -399,12 +399,16 @@ function gapAbove(text: Part, others: Part[]): number | null {
 
   let nearest: number | null = null;
   for (const other of others) {
-    if (other === text || other.kind !== "strokes") continue;
+    if (other === text) continue;
+    // Anything already on the board counts as what this text hangs off, ink or
+    // writing: a caption belongs under the labels, not under the pictures.
     const ink = partsBounds([other]);
     if (!ink) continue;
-    // Only ink this text sits under, and horizontally shares space with.
+    // Everything this text sits below, wherever it sits horizontally. A caption
+    // centred under a row of labels rarely lines up with any single one of
+    // them, and demanding that it does measures the distance to the pictures
+    // instead of to the labels it actually hangs off.
     if (ink.y + ink.h > box.y) continue;
-    if (ink.x > box.x + box.w || ink.x + ink.w < box.x) continue;
     const gap = box.y - (ink.y + ink.h);
     if (nearest === null || gap < nearest) nearest = gap;
   }
@@ -435,7 +439,12 @@ function inspect(label: string, plans: ScenePlan[]) {
       }
 
       // ---- how far a label floats from its drawing
-      if (step.element.type === "sketch" || step.element.type === "diagram") {
+      //
+      // Sketches only. A diagram's labels sit against geometry the diagram
+      // decided — a table's cell text belongs in its cell and a bar chart's
+      // names belong on the axis — so "distance to the nearest ink above" says
+      // nothing useful about them.
+      if (step.element.type === "sketch") {
         for (const part of step.parts) {
           const gap = gapAbove(part, step.parts);
           if (gap !== null && gap > looks.maxLabelGap) {

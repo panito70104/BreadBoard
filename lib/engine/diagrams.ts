@@ -7,7 +7,7 @@
  */
 
 import { HAND_FONT, type Box } from "@/lib/engine/board";
-import { centredLabel, textPart } from "@/lib/engine/labels";
+import { MIN_TEXT_SIZE, centredLabel, textPart } from "@/lib/engine/labels";
 import { boardStrokes, type Part } from "@/lib/engine/parts";
 import {
   roughArrowhead,
@@ -26,7 +26,7 @@ type Point = [number, number];
 
 function axes(labels: string[], box: Box, scale: number): Part[] {
   const [yName = "", xName = "", ...series] = labels;
-  const fontSize = Math.max(24, 34 * scale);
+  const fontSize = Math.max(MIN_TEXT_SIZE, 34 * scale);
   const ox = box.x + 18;
   const top = box.y + fontSize * 1.5;
   const oy = box.y + box.h - fontSize * 1.7;
@@ -96,7 +96,7 @@ function axes(labels: string[], box: Box, scale: number): Part[] {
  * larger, which is usually the whole point, without inventing quantities.
  */
 function bars(labels: string[], values: number[] | undefined, box: Box, scale: number): Part[] {
-  const fontSize = Math.max(22, 32 * scale);
+  const fontSize = Math.max(MIN_TEXT_SIZE, 32 * scale);
   const ox = box.x + 20;
   const right = box.x + box.w - 12;
   const oy = box.y + box.h - fontSize * 2.1;
@@ -140,7 +140,7 @@ function table(labels: string[], columns: number, box: Box, scale: number): Part
   const cellW = box.w / cols;
   const cellH = Math.min(box.h / rows, Math.max(74, box.h * 0.32));
   const height = cellH * rows;
-  const fontSize = Math.max(22, 34 * scale);
+  const fontSize = Math.max(MIN_TEXT_SIZE, 34 * scale);
 
   const cellX = (col: number) => box.x + col * cellW;
   const rowY = (row: number) => box.y + row * cellH;

@@ -21,7 +21,7 @@
 import type { Box } from "@/lib/engine/board";
 import type { Part, StrokePart, TextPart } from "@/lib/engine/parts";
 import { samplePath } from "@/lib/engine/path-sampling";
-import { WRITING_LINE } from "@/lib/engine/text";
+import { CAP_HEIGHT, WRITING_LINE } from "@/lib/engine/text";
 
 export function unionBox(a: Box | null, b: Box | null): Box | null {
   if (!a) return b;
@@ -125,9 +125,8 @@ export function textRowBounds(part: TextPart): Box[] {
   });
 }
 
-/** Cap height as a fraction of the font size, for a handwriting face. */
-const CAP_RATIO = 0.72;
-/** How far below the writing line descenders reach, likewise. */
+const CAP_RATIO = CAP_HEIGHT;
+/** How far below the writing line descenders reach, per unit of type size. */
 const DESCENDER_RATIO = 0.24;
 
 /**

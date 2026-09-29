@@ -30,6 +30,17 @@ const FALLBACK_RATIO = 0.46;
 /** Where the writing line sits inside a line box, as a fraction of its height. */
 export const WRITING_LINE = 0.78;
 
+/**
+ * Vertical metrics of the handwriting face, as fractions of the type size.
+ *
+ * Measured on Caveat through `measureText` at 18, 22, 32, 36 and 46px: both
+ * come out identical at every size, which is what a proportional face does.
+ * They are here because "legible" is a statement about x-height, not about
+ * type size — the same 32px is a different amount of ink in a different face.
+ */
+export const CAP_HEIGHT = 0.701;
+export const X_HEIGHT = 0.357;
+
 const resolved = new Map<string, string>();
 
 /**
