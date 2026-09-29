@@ -156,7 +156,17 @@ export function freehandOutline(d: string, share: number, spec: OutlineSpec): st
   const lengthPx = sampled.length * scale;
   const widthPx = spec.width * scale;
 
-  const last = (sampled.points.length - 1) * clamp(share, 0, 1);
+  /*
+   * A finished stroke is the whole stroke, exactly.
+   *
+   * The cache is keyed on the path and its schedule, not on `share`, because
+   * every finished stroke is the same drawing. That is only true if "finished"
+   * means all of it: cache the outline for a share of 0.9995 and it comes back
+   * for a share of 1, one sample short, and which of the two got there first
+   * depends on the order Remotion happened to render the frames in. Snapping
+   * here is what makes the key honest.
+   */
+  const last = (sampled.points.length - 1) * (done ? 1 : clamp(share, 0, 1));
   const lastIndex = Math.floor(last);
   const step = Math.max(1, Math.ceil((lastIndex + 1) / MAX_POINTS));
 
@@ -177,12 +187,24 @@ export function freehandOutline(d: string, share: number, spec: OutlineSpec): st
     const a = sampled.points[lastIndex];
     const b = sampled.points[lastIndex + 1];
     const t = last - lastIndex;
-    push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, share);
+    push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, last / (sampled.points.length - 1));
   } else if ((lastIndex % step) !== 0) {
     push(sampled.points[lastIndex], 1);
   }
 
-  const taper = Math.min(widthPx * TAPER, lengthPx * TAPER_MAX_SHARE);
+  /*
+   * A closed shape gets no taper.
+   *
+   * On an ellipse or a circle the two ends land on top of each other, so
+   * tapering both leaves a notch exactly where the line should be continuous —
+   * the one place a viewer reads as a mistake rather than as a hand. A person
+   * closing a loop overlaps the start instead of thinning into it.
+   */
+  const first = sampled.points[0];
+  const end = sampled.points[sampled.points.length - 1];
+  const closed = Math.hypot(end.x - first.x, end.y - first.y) * scale < widthPx * 2;
+
+  const taper = closed ? 0 : Math.min(widthPx * TAPER, lengthPx * TAPER_MAX_SHARE);
 
   const outline = getStroke(input, {
     size: widthPx,
