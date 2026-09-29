@@ -51,6 +51,8 @@ export interface WhiteboardCompositionProps {
    * new one has earned it.
    */
   strokeStyle?: StrokeStyle;
+  /** Where the hand images are served from. See `Hand`'s `srcBase`. */
+  assetBase?: string;
 }
 
 /** Faint ruling under the content, per style. */
@@ -90,6 +92,7 @@ export function WhiteboardComposition({
   handFamily,
   audioUrls,
   strokeStyle = DEFAULT_STROKE_STYLE,
+  assetBase,
 }: WhiteboardCompositionProps) {
   const frame = useCurrentFrame();
   const theme = BOARD_THEMES[style];
@@ -192,6 +195,7 @@ export function WhiteboardComposition({
             frame={frame}
             tool={stage.hand.tool}
             family={handFamily}
+            srcBase={assetBase}
           />
         )}
       </AbsoluteFill>

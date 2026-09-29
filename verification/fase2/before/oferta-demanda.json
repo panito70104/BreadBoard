@@ -1,0 +1,447 @@
+{
+  "videoTitle": "Oferta, demanda y equilibrio",
+  "language": "es",
+  "targetSeconds": 140,
+  "scenes": [
+    {
+      "id": "scene_1",
+      "index": 1,
+      "title": "La ley de la demanda",
+      "summary": "El precio sube y la cantidad comprada baja: la curva de demanda desciende.",
+      "narration": "Mira este café. Cuesta dos euros y la ciudad se bebe mil al día. Ahora sube a cuatro euros. Mucha gente pide té, o se lo hace en casa, o simplemente toma menos. Precio arriba, cantidad abajo. Por eso la demanda se dibuja como una curva que baja de izquierda a derecha, y no como un solo número.",
+      "layout": "visual-left-bullets-right",
+      "steps": [
+        {
+          "on": "Por eso la demanda se dibuja",
+          "draw": {
+            "type": "title",
+            "text": "La ley de la demanda"
+          }
+        },
+        {
+          "on": "Mira este café",
+          "draw": {
+            "type": "sketch",
+            "slot": "visual",
+            "items": [
+              {
+                "icon": "Coffee",
+                "label": "2 euros"
+              },
+              {
+                "icon": "Users",
+                "label": "mil al día",
+                "mark": "check",
+                "color": "green"
+              }
+            ],
+            "relation": "equals"
+          }
+        },
+        {
+          "on": "Ahora sube a cuatro euros",
+          "draw": {
+            "type": "sketch",
+            "slot": "list",
+            "items": [
+              {
+                "icon": "Coffee",
+                "label": "4 euros",
+                "color": "red"
+              },
+              {
+                "icon": "User",
+                "label": "pocos",
+                "mark": "cross",
+                "color": "red"
+              }
+            ],
+            "relation": "equals"
+          }
+        },
+        {
+          "on": "Precio arriba, cantidad abajo",
+          "draw": {
+            "type": "icon",
+            "slot": "footer",
+            "id": "TrendingDown",
+            "scale": 1,
+            "color": "red"
+          }
+        },
+        {
+          "on": "una curva que baja de izquierda a derecha",
+          "draw": {
+            "type": "bullet",
+            "slot": "list",
+            "text": "Sube el precio, baja la cantidad",
+            "marker": "arrow",
+            "color": "red"
+          }
+        },
+        {
+          "on": "y no como un solo número",
+          "draw": {
+            "type": "emphasis",
+            "shape": "box",
+            "target": "list"
+          }
+        }
+      ],
+      "durationSeconds": 26
+    },
+    {
+      "id": "scene_2",
+      "index": 2,
+      "title": "La ley de la oferta",
+      "summary": "Con precios altos aparecen más vendedores: la curva de oferta sube.",
+      "narration": "Del otro lado está el vendedor, y con él todo va al revés. Si el café se paga a un euro, casi ninguna cafetería quiere levantar la persiana. Si se paga a cuatro, aparecen cafeterías nuevas, porque ahora sí les compensa. Precio arriba, cantidad producida arriba también. La curva de oferta sube de izquierda a derecha.",
+      "layout": "visual-left-bullets-right",
+      "steps": [
+        {
+          "on": "Del otro lado está el vendedor",
+          "draw": {
+            "type": "title",
+            "text": "La ley de la oferta"
+          }
+        },
+        {
+          "on": "casi ninguna cafetería quiere levantar la persiana",
+          "draw": {
+            "type": "sketch",
+            "slot": "visual",
+            "items": [
+              {
+                "icon": "Coins",
+                "label": "1 euro"
+              },
+              {
+                "icon": "Store",
+                "label": "una",
+                "mark": "cross",
+                "color": "red"
+              }
+            ],
+            "relation": "arrow"
+          }
+        },
+        {
+          "on": "aparecen cafeterías nuevas",
+          "draw": {
+            "type": "sketch",
+            "slot": "list",
+            "items": [
+              {
+                "icon": "Coins",
+                "label": "4 euros"
+              },
+              {
+                "icon": "Store",
+                "label": "muchas",
+                "mark": "check",
+                "color": "green"
+              }
+            ],
+            "relation": "arrow"
+          }
+        },
+        {
+          "on": "porque ahora sí les compensa",
+          "draw": {
+            "type": "icon",
+            "slot": "footer",
+            "id": "TrendingUp",
+            "scale": 1,
+            "color": "green"
+          }
+        },
+        {
+          "on": "Precio arriba, cantidad producida arriba también",
+          "draw": {
+            "type": "bullet",
+            "slot": "list",
+            "text": "Más precio, más ganas de vender",
+            "marker": "arrow",
+            "color": "green"
+          }
+        },
+        {
+          "on": "La curva de oferta sube de izquierda a derecha",
+          "draw": {
+            "type": "emphasis",
+            "shape": "box",
+            "target": "list"
+          }
+        }
+      ],
+      "durationSeconds": 26
+    },
+    {
+      "id": "scene_3",
+      "index": 3,
+      "title": "El punto de equilibrio",
+      "summary": "Las dos curvas sobre los mismos ejes se cruzan en el equilibrio.",
+      "narration": "Ahora pon las dos curvas sobre los mismos ejes. El precio en el eje de arriba, la cantidad en el de abajo. La que baja es la demanda, la que sube es la oferta, y en algún sitio se cruzan. Ese cruce es el equilibrio: mil cafés al día a dos euros y medio. Justo los que la gente quiere y justo los que las cafeterías hacen.",
+      "layout": "center-diagram-labels",
+      "steps": [
+        {
+          "on": "Ahora pon las dos curvas",
+          "draw": {
+            "type": "title",
+            "text": "El punto de equilibrio"
+          }
+        },
+        {
+          "on": "El precio en el eje de arriba",
+          "draw": {
+            "type": "diagram",
+            "slot": "center",
+            "kind": "axes",
+            "labels": [
+              "Precio",
+              "Cantidad",
+              "Demanda",
+              "Oferta"
+            ]
+          }
+        },
+        {
+          "on": "en algún sitio se cruzan",
+          "draw": {
+            "type": "emphasis",
+            "shape": "circle",
+            "target": "center",
+            "color": "amber"
+          }
+        },
+        {
+          "on": "mil cafés al día a dos euros y medio",
+          "draw": {
+            "type": "sketch",
+            "slot": "aside",
+            "items": [
+              {
+                "icon": "Users",
+                "label": "quieren"
+              },
+              {
+                "icon": "Store",
+                "label": "hacen"
+              }
+            ],
+            "relation": "equals",
+            "caption": "1000 cafés"
+          }
+        },
+        {
+          "on": "Justo los que la gente quiere",
+          "draw": {
+            "type": "bullet",
+            "slot": "aside",
+            "text": "Precio: 2,50 euros",
+            "marker": "check",
+            "color": "green"
+          }
+        },
+        {
+          "on": "y justo los que las cafeterías hacen",
+          "draw": {
+            "type": "emphasis",
+            "shape": "box",
+            "target": "aside"
+          }
+        }
+      ],
+      "durationSeconds": 28
+    },
+    {
+      "id": "scene_4",
+      "index": 4,
+      "title": "Excedente y escasez",
+      "summary": "Fuera del equilibrio sobra género o faltan cafés, y el precio se corrige solo.",
+      "narration": "¿Y si el precio no es ese? A cuatro euros las cafeterías hacen mil quinientos y la gente compra cuatrocientos. Sobra género, se estropea, y acaban bajando el precio. A un euro pasa lo contrario: la gente quiere dos mil y solo hay quinientos. Aparecen colas, y el vendedor entiende que puede subir el precio. En los dos casos, el mercado vuelve solo al cruce.",
+      "layout": "two-column-compare",
+      "steps": [
+        {
+          "on": "¿Y si el precio no es ese?",
+          "draw": {
+            "type": "title",
+            "text": "Excedente y escasez"
+          }
+        },
+        {
+          "on": "las cafeterías hacen mil quinientos",
+          "draw": {
+            "type": "sketch",
+            "slot": "left",
+            "items": [
+              {
+                "icon": "Warehouse",
+                "label": "1500"
+              },
+              {
+                "icon": "User",
+                "label": "400",
+                "mark": "cross",
+                "color": "red"
+              }
+            ],
+            "relation": "vs",
+            "caption": "Sobra",
+            "color": "red"
+          }
+        },
+        {
+          "on": "acaban bajando el precio",
+          "draw": {
+            "type": "bullet",
+            "slot": "left",
+            "text": "El precio baja",
+            "marker": "arrow",
+            "color": "red"
+          }
+        },
+        {
+          "on": "la gente quiere dos mil y solo hay quinientos",
+          "draw": {
+            "type": "sketch",
+            "slot": "right",
+            "items": [
+              {
+                "icon": "Users",
+                "label": "2000"
+              },
+              {
+                "icon": "Coffee",
+                "label": "500",
+                "mark": "cross",
+                "color": "amber"
+              }
+            ],
+            "relation": "vs",
+            "caption": "Falta",
+            "color": "amber"
+          }
+        },
+        {
+          "on": "Aparecen colas",
+          "draw": {
+            "type": "bullet",
+            "slot": "right",
+            "text": "El precio sube",
+            "marker": "arrow",
+            "color": "green"
+          }
+        },
+        {
+          "on": "el mercado vuelve solo al cruce",
+          "draw": {
+            "type": "emphasis",
+            "shape": "underline",
+            "target": "title",
+            "color": "amber"
+          }
+        }
+      ],
+      "durationSeconds": 30
+    },
+    {
+      "id": "scene_5",
+      "index": 5,
+      "title": "Cuando la curva se mueve",
+      "summary": "Un cambio de renta o de costes desplaza la curva entera y mueve el cruce.",
+      "narration": "Falta una cosa. Si la gente gana más dinero, compra más café a cualquier precio: la curva de demanda entera se va a la derecha y el cruce sube. Si el grano se encarece, producir cuesta más y la oferta se va a la izquierda: sube el precio y baja la cantidad. Quédate con esto: el cruce es el equilibrio, y todo lo demás lo mueve.",
+      "layout": "visual-left-bullets-right",
+      "steps": [
+        {
+          "on": "Falta una cosa",
+          "draw": {
+            "type": "title",
+            "text": "Cuando la curva se mueve"
+          }
+        },
+        {
+          "on": "Si la gente gana más dinero",
+          "draw": {
+            "type": "sketch",
+            "slot": "visual",
+            "items": [
+              {
+                "icon": "Wallet",
+                "label": "más renta",
+                "color": "green"
+              },
+              {
+                "icon": "ChartLine",
+                "label": "demanda"
+              },
+              {
+                "icon": "ArrowRight",
+                "label": "derecha",
+                "color": "green"
+              }
+            ],
+            "relation": "arrow",
+            "caption": "Sube precio y cantidad"
+          }
+        },
+        {
+          "on": "Si el grano se encarece",
+          "draw": {
+            "type": "sketch",
+            "slot": "list",
+            "items": [
+              {
+                "icon": "Wheat",
+                "label": "más coste",
+                "color": "red"
+              },
+              {
+                "icon": "Factory",
+                "label": "oferta"
+              },
+              {
+                "icon": "TrendingDown",
+                "label": "izquierda",
+                "color": "red"
+              }
+            ],
+            "relation": "arrow",
+            "caption": "Sube precio, baja cantidad"
+          }
+        },
+        {
+          "on": "Quédate con esto",
+          "draw": {
+            "type": "icon",
+            "slot": "footer",
+            "id": "Target",
+            "scale": 1.2,
+            "color": "amber"
+          }
+        },
+        {
+          "on": "el cruce es el equilibrio",
+          "draw": {
+            "type": "bullet",
+            "slot": "list",
+            "text": "El cruce manda",
+            "marker": "star",
+            "color": "amber"
+          }
+        },
+        {
+          "on": "y todo lo demás lo mueve",
+          "draw": {
+            "type": "emphasis",
+            "shape": "box",
+            "target": "list",
+            "color": "amber"
+          }
+        }
+      ],
+      "durationSeconds": 30
+    }
+  ],
+  "totalSeconds": 140
+}

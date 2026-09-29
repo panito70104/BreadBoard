@@ -1,0 +1,76 @@
+Introducción a la microeconomía — Oferta, demanda y equilibrio
+
+Apuntes de clase, tema 2
+
+La demanda
+
+La demanda es la relación entre el precio de un bien y la cantidad que los
+compradores quieren llevarse a ese precio. No es un número suelto: es una
+relación, y por eso se dibuja como una curva y no como un punto.
+
+La ley de la demanda dice que, si todo lo demás no cambia, cuanto más alto es el
+precio menos cantidad se compra. Si el café pasa de dos euros a cuatro, mucha
+gente pide té, o se lo hace en casa, o simplemente toma menos. Por eso la curva
+de demanda baja de izquierda a derecha.
+
+Conviene separar dos cosas que se confunden. Un cambio de precio mueve el punto
+a lo largo de la misma curva: es un movimiento dentro de la demanda. Un cambio
+en otra cosa —la renta de la gente, el precio del té, la moda— desplaza la curva
+entera a la derecha o a la izquierda: eso es un cambio de la demanda.
+
+La oferta
+
+La oferta es la otra mitad: la relación entre el precio y la cantidad que los
+vendedores están dispuestos a producir a ese precio.
+
+Aquí la relación va al revés. Cuanto más alto es el precio, más cantidad quieren
+vender, porque a más precio salen rentables productores a los que antes no les
+compensaba. La curva de oferta, por tanto, sube de izquierda a derecha.
+
+Igual que en la demanda, un cambio de precio mueve el punto a lo largo de la
+curva, mientras que un cambio en los costes de producción, en la tecnología o en
+el número de vendedores desplaza la curva entera.
+
+El equilibrio
+
+Si se dibujan las dos curvas sobre los mismos ejes, precio en el vertical y
+cantidad en el horizontal, se cruzan en un punto. Ese punto es el equilibrio del
+mercado, y es lo único que hay que quedarse de este tema.
+
+En el equilibrio, la cantidad que los compradores quieren comprar y la que los
+vendedores quieren vender son exactamente la misma. El precio al que ocurre se
+llama precio de equilibrio y la cantidad, cantidad de equilibrio.
+
+Qué pasa fuera del equilibrio
+
+Por encima del precio de equilibrio hay excedente: los vendedores traen más
+cantidad de la que nadie quiere comprar, se les acumula el género y acaban
+bajando el precio para quitárselo de encima.
+
+Por debajo hay escasez: los compradores quieren más cantidad de la que hay,
+aparecen colas y listas de espera, y los vendedores se dan cuenta de que pueden
+subir el precio.
+
+En los dos casos el mercado empuja el precio hacia el equilibrio. No hace falta
+que nadie lo organice: lo hacen las decisiones de cada comprador y cada vendedor
+por separado.
+
+Un ejemplo
+
+En una ciudad se venden mil cafés al día a dos euros y medio, y a ese precio las
+cafeterías producen justo mil. Ese es el equilibrio.
+
+Si el ayuntamiento obligara a venderlos a un euro, la gente querría dos mil al
+día pero las cafeterías solo harían quinientos: faltarían mil quinientos cafés y
+habría colas. Si el precio fuera de cuatro euros, las cafeterías harían mil
+quinientos y la gente solo compraría cuatrocientos: sobrarían mil cien cafés.
+
+Desplazamientos
+
+Si sube la renta de la gente, la curva de demanda se desplaza a la derecha: a
+cada precio se compra más. El nuevo cruce queda más arriba y más a la derecha,
+así que suben el precio y la cantidad.
+
+Si sube el precio del café en grano, producir cuesta más y la curva de oferta se
+desplaza a la izquierda. El nuevo cruce queda más arriba y más a la izquierda:
+sube el precio y baja la cantidad.

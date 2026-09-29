@@ -34,7 +34,14 @@ export const WHITEBOARD_COMPOSITION_ID = "whiteboard";
  */
 type CompositionProps = WhiteboardCompositionProps & Record<string, unknown>;
 
-const Whiteboard = WhiteboardComposition as React.FC<CompositionProps>;
+/*
+ * Injected rather than passed as a default prop: `renderStill` is called with
+ * its own `inputProps`, and a caller that forgets this one gets a board with no
+ * hand on it and no error to explain why.
+ */
+const Whiteboard: React.FC<CompositionProps> = (props) => (
+  <WhiteboardComposition {...(props as unknown as WhiteboardCompositionProps)} assetBase="/public" />
+);
 
 export function RemotionRoot() {
   return (

@@ -1,0 +1,77 @@
+Estructuras de datos — Listas enlazadas
+
+Apuntes de clase, tema 4
+
+Qué es una lista enlazada
+
+Una lista enlazada es una colección de elementos donde cada elemento guarda dos
+cosas: el dato que le importa al programa, y la dirección del siguiente
+elemento. A cada elemento se le llama nodo.
+
+La diferencia con un array está en la memoria. Un array ocupa un bloque
+contiguo: si el primer elemento está en la posición 1000 y cada uno ocupa 4
+bytes, el tercero está en 1008 y el ordenador puede calcularlo sin mirar nada
+más. Los nodos de una lista enlazada, en cambio, están repartidos por la
+memoria, cada uno donde hubo hueco. Uno puede estar en la 1000, el siguiente en
+la 7400 y el tercero en la 2100. Lo único que los mantiene juntos es que cada
+uno guarda la dirección del siguiente.
+
+Ese puntero al siguiente es toda la estructura. El último nodo no apunta a
+ninguna parte: guarda null, y eso es lo que marca el final de la lista.
+
+Cómo se recorre
+
+Para llegar a un elemento hay que empezar por el primero, que se llama cabeza, y
+seguir los punteros de uno en uno. No hay forma de saltar al quinto
+directamente, porque no se sabe dónde está hasta haber pasado por el cuarto.
+
+Recorrer una lista de n elementos cuesta, por tanto, n pasos en el peor caso.
+Buscar un valor cuesta lo mismo: hay que mirar nodo por nodo hasta encontrarlo o
+llegar al final. En notación O grande, la búsqueda es O(n).
+
+Un array hace esto mucho mejor. Como todo está seguido y todos los elementos
+miden lo mismo, acceder a la posición i cuesta una multiplicación y una suma,
+sin importar cuántos elementos haya. Eso es O(1).
+
+Dónde gana la lista enlazada
+
+La ventaja aparece al insertar y al borrar. Para meter un elemento nuevo en
+medio de un array hay que desplazar todos los que vienen después para hacerle
+sitio, y eso cuesta O(n). En una lista enlazada basta con cambiar dos punteros:
+el nodo anterior deja de apuntar al que era su siguiente y pasa a apuntar al
+nuevo, y el nuevo apunta al que quedó desplazado. Nada más se mueve. Si ya se
+tiene el nodo anterior localizado, la inserción es O(1).
+
+Borrar funciona igual: el nodo anterior pasa a apuntar al siguiente del que se
+va, y el nodo eliminado deja de estar en la cadena.
+
+También crece sin límite fijo. Un array reserva un tamaño de antemano y, cuando
+se llena, hay que pedir un bloque más grande y copiarlo todo. Una lista enlazada
+va pidiendo memoria nodo a nodo, según hace falta.
+
+Qué se paga a cambio
+
+Cada nodo gasta memoria de más para guardar el puntero. En una lista de enteros
+de 4 bytes con punteros de 8, dos tercios de la memoria se van en direcciones.
+
+Y hay un coste menos evidente: como los nodos están dispersos, el procesador no
+puede aprovechar la caché. Cuando lee una posición de memoria se trae también
+las de al lado, suponiendo que las va a necesitar enseguida; en un array eso
+acierta siempre, y en una lista enlazada casi nunca, porque el siguiente nodo
+está en otra parte del mapa.
+
+Variantes
+
+La lista doblemente enlazada guarda, además del puntero al siguiente, uno al
+anterior. Así se puede recorrer en los dos sentidos y borrar un nodo teniéndolo
+solo a él, pero cada nodo gasta un puntero más.
+
+La lista circular hace que el último apunte al primero en vez de a null. Sirve
+para cosas que dan vueltas: el turno de los jugadores, un buffer que se
+reescribe.
+
+Cuándo usar cada una
+
+Usa un array cuando vayas a acceder mucho por posición y poco a insertar en
+medio. Usa una lista enlazada cuando vayas a insertar y borrar constantemente en
+puntos que ya tienes localizados, y no te importe recorrer para buscar.

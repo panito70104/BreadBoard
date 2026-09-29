@@ -1,0 +1,478 @@
+{
+  "videoTitle": "Listas enlazadas: la cadena de nodos",
+  "language": "es",
+  "targetSeconds": 156,
+  "scenes": [
+    {
+      "id": "scene_1",
+      "index": 1,
+      "title": "Qué es un nodo",
+      "summary": "Un nodo guarda un dato y la dirección del siguiente.",
+      "narration": "Imagina una caja. Dentro hay dos cosas: un dato, y un papelito con la dirección de la siguiente caja. Esa caja es un nodo. Si encadenas muchas cajas así, tienes una lista enlazada. La última caja no tiene papelito: ahí se acaba la cadena.",
+      "layout": "visual-left-bullets-right",
+      "steps": [
+        {
+          "on": "Esa caja es un nodo",
+          "draw": {
+            "type": "title",
+            "text": "Qué es un nodo"
+          }
+        },
+        {
+          "on": "Esa caja es un nodo",
+          "draw": {
+            "type": "emphasis",
+            "shape": "underline",
+            "target": "title"
+          }
+        },
+        {
+          "on": "Imagina una caja",
+          "draw": {
+            "type": "sketch",
+            "slot": "visual",
+            "items": [
+              {
+                "icon": "Box",
+                "label": "dato"
+              },
+              {
+                "icon": "MapPin",
+                "label": "dirección",
+                "color": "brand"
+              }
+            ],
+            "relation": "plus",
+            "caption": "un nodo"
+          }
+        },
+        {
+          "on": "Si encadenas muchas cajas",
+          "draw": {
+            "type": "sketch",
+            "slot": "list",
+            "items": [
+              {
+                "icon": "Box"
+              },
+              {
+                "icon": "Box"
+              },
+              {
+                "icon": "Box",
+                "label": "fin",
+                "color": "red"
+              }
+            ],
+            "relation": "arrow"
+          }
+        },
+        {
+          "on": "La última caja no tiene papelito",
+          "draw": {
+            "type": "bullet",
+            "slot": "list",
+            "text": "El último guarda null",
+            "marker": "arrow",
+            "color": "red"
+          }
+        },
+        {
+          "on": "ahí se acaba la cadena",
+          "draw": {
+            "type": "emphasis",
+            "shape": "box",
+            "target": "visual",
+            "color": "amber"
+          }
+        }
+      ],
+      "durationSeconds": 24
+    },
+    {
+      "id": "scene_2",
+      "index": 2,
+      "title": "Array contra lista",
+      "summary": "El array vive seguido; los nodos están dispersos.",
+      "narration": "Un array es como una fila de casillas pegadas en la memoria. Si sabes dónde empieza, calculas cualquier casilla de un salto. Los nodos de una lista, en cambio, están tirados por todo el mapa: uno aquí, el siguiente muy lejos. Lo único que los une son las flechas.",
+      "layout": "two-column-compare",
+      "steps": [
+        {
+          "on": "Un array es como una fila",
+          "draw": {
+            "type": "title",
+            "text": "Array contra lista"
+          }
+        },
+        {
+          "on": "casillas pegadas en la memoria",
+          "draw": {
+            "type": "sketch",
+            "slot": "left",
+            "items": [
+              {
+                "icon": "Square"
+              },
+              {
+                "icon": "Square"
+              },
+              {
+                "icon": "Square"
+              }
+            ],
+            "relation": "none",
+            "caption": "array: todo seguido"
+          }
+        },
+        {
+          "on": "calculas cualquier casilla de un salto",
+          "draw": {
+            "type": "bullet",
+            "slot": "left",
+            "text": "Salto directo a la casilla",
+            "marker": "check",
+            "color": "green"
+          }
+        },
+        {
+          "on": "están tirados por todo el mapa",
+          "draw": {
+            "type": "sketch",
+            "slot": "right",
+            "items": [
+              {
+                "icon": "Box",
+                "label": "1000"
+              },
+              {
+                "icon": "Box",
+                "label": "7400"
+              },
+              {
+                "icon": "Box",
+                "label": "2100"
+              }
+            ],
+            "relation": "arrow",
+            "caption": "lista: repartida",
+            "color": "brand"
+          }
+        },
+        {
+          "on": "Lo único que los une son las flechas",
+          "draw": {
+            "type": "emphasis",
+            "shape": "circle",
+            "target": "right",
+            "color": "amber"
+          }
+        }
+      ],
+      "durationSeconds": 24
+    },
+    {
+      "id": "scene_3",
+      "index": 3,
+      "title": "Buscar cuesta caro",
+      "summary": "Hay que recorrer nodo a nodo desde la cabeza.",
+      "narration": "Para llegar al quinto nodo no puedes saltar. Empiezas por la cabeza y sigues las flechas, una por una, como quien camina por un sendero. Si hay cien nodos, en el peor caso das cien pasos. Eso es lo que llamamos o de ene. El array, en cambio, llega de un salto.",
+      "layout": "visual-left-bullets-right",
+      "steps": [
+        {
+          "on": "Para llegar al quinto nodo",
+          "draw": {
+            "type": "title",
+            "text": "Buscar cuesta caro"
+          }
+        },
+        {
+          "on": "Empiezas por la cabeza y sigues las flechas",
+          "draw": {
+            "type": "sketch",
+            "slot": "visual",
+            "items": [
+              {
+                "icon": "Flag",
+                "label": "cabeza",
+                "color": "green"
+              },
+              {
+                "icon": "Footprints"
+              },
+              {
+                "icon": "Footprints"
+              },
+              {
+                "icon": "Target",
+                "label": "buscado",
+                "color": "amber"
+              }
+            ],
+            "relation": "arrow",
+            "caption": "paso a paso"
+          }
+        },
+        {
+          "on": "das cien pasos",
+          "draw": {
+            "type": "bullet",
+            "slot": "list",
+            "text": "Buscar en la lista: O(n)",
+            "marker": "dash",
+            "color": "red"
+          }
+        },
+        {
+          "on": "El array, en cambio, llega de un salto",
+          "draw": {
+            "type": "icon",
+            "slot": "list",
+            "id": "Zap",
+            "color": "green"
+          }
+        }
+      ],
+      "durationSeconds": 24
+    },
+    {
+      "id": "scene_4",
+      "index": 4,
+      "title": "Insertar es barato",
+      "summary": "Insertar solo cambia dos punteros; el array se desplaza.",
+      "narration": "Aquí gana la lista. Para meter algo en medio de un array hay que empujar todo lo que viene detrás para hacer sitio. En la lista no se mueve nadie: el nodo de antes deja de apuntar a su vecino y apunta al nuevo, y el nuevo apunta al vecino. Dos flechas cambiadas y ya está. Borrar es igual de fácil.",
+      "layout": "two-column-compare",
+      "steps": [
+        {
+          "on": "Aquí gana la lista",
+          "draw": {
+            "type": "title",
+            "text": "Insertar es barato"
+          }
+        },
+        {
+          "on": "hay que empujar todo lo que viene detrás",
+          "draw": {
+            "type": "sketch",
+            "slot": "left",
+            "items": [
+              {
+                "icon": "Square"
+              },
+              {
+                "icon": "Package",
+                "label": "nuevo",
+                "color": "amber"
+              },
+              {
+                "icon": "Truck",
+                "label": "empujar",
+                "mark": "cross",
+                "color": "red"
+              }
+            ],
+            "relation": "plus",
+            "caption": "array: mueve todo"
+          }
+        },
+        {
+          "on": "En la lista no se mueve nadie",
+          "draw": {
+            "type": "sketch",
+            "slot": "right",
+            "items": [
+              {
+                "icon": "Box"
+              },
+              {
+                "icon": "Package",
+                "label": "nuevo",
+                "mark": "check",
+                "color": "green"
+              },
+              {
+                "icon": "Box"
+              }
+            ],
+            "relation": "arrow",
+            "caption": "solo dos flechas"
+          }
+        },
+        {
+          "on": "Dos flechas cambiadas y ya está",
+          "draw": {
+            "type": "bullet",
+            "slot": "right",
+            "text": "Insertar y borrar: O(1)",
+            "marker": "star",
+            "color": "green"
+          }
+        },
+        {
+          "on": "Borrar es igual de fácil",
+          "draw": {
+            "type": "emphasis",
+            "shape": "box",
+            "target": "right",
+            "color": "green"
+          }
+        }
+      ],
+      "durationSeconds": 29
+    },
+    {
+      "id": "scene_5",
+      "index": 5,
+      "title": "Lo que se paga",
+      "summary": "Memoria extra por puntero y pérdida de caché.",
+      "narration": "Nada es gratis. Cada nodo gasta memoria de más solo para guardar la dirección. Con datos de cuatro bytes y direcciones de ocho, dos tercios de la memoria se van en flechas. Y como los nodos están dispersos, el procesador falla la caché: se trae lo de al lado y casi nunca le sirve.",
+      "layout": "center-diagram-labels",
+      "steps": [
+        {
+          "on": "Nada es gratis",
+          "draw": {
+            "type": "title",
+            "text": "Lo que se paga"
+          }
+        },
+        {
+          "on": "solo para guardar la dirección",
+          "draw": {
+            "type": "diagram",
+            "slot": "center",
+            "kind": "bars",
+            "labels": [
+              "dato 4",
+              "puntero 8"
+            ],
+            "values": [
+              4,
+              8
+            ]
+          }
+        },
+        {
+          "on": "dos tercios de la memoria se van en flechas",
+          "draw": {
+            "type": "bullet",
+            "slot": "aside",
+            "text": "Dos tercios en direcciones",
+            "marker": "dash",
+            "color": "red"
+          }
+        },
+        {
+          "on": "el procesador falla la caché",
+          "draw": {
+            "type": "sketch",
+            "slot": "aside",
+            "items": [
+              {
+                "icon": "Cpu",
+                "label": "caché"
+              },
+              {
+                "icon": "Box",
+                "label": "lejos",
+                "mark": "cross",
+                "color": "red"
+              }
+            ],
+            "relation": "arrow",
+            "caption": "falla casi siempre"
+          }
+        }
+      ],
+      "durationSeconds": 24
+    },
+    {
+      "id": "scene_6",
+      "index": 6,
+      "title": "Variantes y elección",
+      "summary": "Doble, circular, y cuándo usar cada estructura.",
+      "narration": "Dos variantes. La doblemente enlazada añade una flecha hacia atrás, así se camina en los dos sentidos. La circular hace que el último apunte al primero, como el turno de los jugadores. Y para elegir: array si vas a leer mucho por posición, lista si vas a insertar y borrar todo el rato.",
+      "layout": "visual-left-bullets-right",
+      "steps": [
+        {
+          "on": "Dos variantes",
+          "draw": {
+            "type": "title",
+            "text": "Variantes y elección"
+          }
+        },
+        {
+          "on": "añade una flecha hacia atrás",
+          "draw": {
+            "type": "sketch",
+            "slot": "visual",
+            "items": [
+              {
+                "icon": "Box"
+              },
+              {
+                "icon": "ArrowLeftRight",
+                "label": "doble",
+                "color": "brand"
+              },
+              {
+                "icon": "Box"
+              }
+            ],
+            "relation": "none",
+            "caption": "doblemente enlazada"
+          }
+        },
+        {
+          "on": "como el turno de los jugadores",
+          "draw": {
+            "type": "sketch",
+            "slot": "list",
+            "items": [
+              {
+                "icon": "Users",
+                "label": "turnos"
+              },
+              {
+                "icon": "RefreshCw",
+                "label": "circular",
+                "color": "brand"
+              }
+            ],
+            "relation": "arrow",
+            "caption": "el último vuelve al primero"
+          }
+        },
+        {
+          "on": "array si vas a leer mucho por posición",
+          "draw": {
+            "type": "bullet",
+            "slot": "list",
+            "text": "Array: leer por posición",
+            "marker": "check",
+            "color": "green"
+          }
+        },
+        {
+          "on": "lista si vas a insertar y borrar todo el rato",
+          "draw": {
+            "type": "bullet",
+            "slot": "list",
+            "text": "Lista: insertar y borrar",
+            "marker": "check",
+            "color": "green"
+          }
+        },
+        {
+          "on": "lista si vas a insertar y borrar todo el rato",
+          "draw": {
+            "type": "emphasis",
+            "shape": "box",
+            "target": "list",
+            "color": "amber"
+          }
+        }
+      ],
+      "durationSeconds": 29
+    }
+  ],
+  "totalSeconds": 154
+}

@@ -18,7 +18,8 @@
     "engine:verify": "tsx --tsconfig ./tsconfig.json scripts/verify-engine.mts",
     "voice:verify": "tsx --tsconfig ./tsconfig.json scripts/verify-voice.mts",
     "engine:stills": "tsx --tsconfig ./tsconfig.json scripts/render-stills.mts",
-    "engine:bench": "tsx --tsconfig ./tsconfig.json scripts/bench-frames.mts"
+    "engine:bench": "tsx --tsconfig ./tsconfig.json scripts/bench-frames.mts",
+    "engine:generate": "tsx --env-file=.env.local --tsconfig ./tsconfig.json scripts/generate-storyboard.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

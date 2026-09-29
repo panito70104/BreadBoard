@@ -33,6 +33,7 @@ import {
   visualHealth,
   type VisualHealth,
 } from "@/lib/storyboard/schema";
+import { usageOf, type UsageSink } from "@/lib/storyboard/usage";
 import type { StoryboardParseResult } from "@/types/storyboard";
 
 /** Writing a lesson plan from a document is reasoning work — keep Opus. */
@@ -45,10 +46,18 @@ export class StoryboardGenerationError extends Error {
   }
 }
 
+export interface GenerateOptions {
+  client?: Anthropic;
+  /** Where to report what the call cost. Scripts pass one; production does not. */
+  usage?: UsageSink;
+}
+
 async function ask(
   client: Anthropic,
   request: StoryboardRequest,
   message: string,
+  options: GenerateOptions,
+  note: string,
 ): Promise<StoryboardParseResult> {
   let response;
 
@@ -122,6 +131,8 @@ async function ask(
     throw new StoryboardGenerationError("El modelo no devolvió un guion válido.");
   }
 
+  options.usage?.({ call: "storyboard", model: MODEL, note, ...usageOf(response) });
+
   // Structured outputs got the shape right; this fixes the meaning.
   return parseStoryboard(response.parsed_output, {
     fallbackTitle: request.documentName,
@@ -146,15 +157,22 @@ function correction(health: VisualHealth): string {
 
 export async function generateStoryboard(
   request: StoryboardRequest,
-  client: Anthropic = new Anthropic(),
+  options: GenerateOptions = {},
 ): Promise<StoryboardParseResult> {
+  const client = options.client ?? new Anthropic();
   const prompt = buildStoryboardUserPrompt(request);
-  const first = await ask(client, request, prompt);
+  const first = await ask(client, request, prompt, options, "intento 1");
 
   const health = visualHealth(first.storyboard);
   if (health.ok) return first;
 
-  const second = await ask(client, request, prompt + "\n" + correction(health));
+  const second = await ask(
+    client,
+    request,
+    prompt + "\n" + correction(health),
+    options,
+    "intento 2 (text-heavy)",
+  );
   const retried = visualHealth(second.storyboard);
 
   // Keep whichever drew more; a second attempt is not automatically better.

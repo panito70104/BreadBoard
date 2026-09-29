@@ -32,6 +32,14 @@ export interface HandProps {
   tool?: HandTool;
   family?: number;
   opacity?: number;
+  /**
+   * Prefix for the image URL.
+   *
+   * Next serves `public/hands/x.webp` at `/hands/x.webp`; Remotion's headless
+   * bundle serves the same file at `/public/hands/x.webp`. The asset table
+   * keeps the Next path, and the Remotion entry says where it really is.
+   */
+  srcBase?: string;
 }
 
 /**
@@ -57,6 +65,7 @@ export function Hand({
   tool = "marker",
   family,
   opacity = 1,
+  srcBase = "",
 }: HandProps) {
   if (opacity <= 0.01) return null;
 
@@ -85,7 +94,7 @@ export function Hand({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={asset.src}
+      src={`${srcBase}${asset.src}`}
       alt=""
       draggable={false}
       style={{

@@ -19,7 +19,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,6 +40,12 @@ function flag(name: string): string | undefined {
 
 const outDir = path.resolve(ROOT, flag("out") ?? "verification/fase1/before");
 const only = flag("only")?.split(",").map((value) => value.trim()).filter(Boolean);
+/**
+ * A storyboard JSON to render instead of the phase-1 fixtures — a file, or a
+ * directory of them. Phase 2 generates real storyboards from real documents and
+ * has to look at them, and they do not belong in a TypeScript fixture module.
+ */
+const storyboardArg = flag("storyboard");
 /** Which way lines are drawn: "rough" (the default) or "freehand". */
 const strokeStyle = flag("stroke-style") ?? "rough";
 /**
@@ -58,33 +64,65 @@ installDom();
 const { FASE1_FIXTURES, FASE1_IDS } = await import("@/fixtures/fase1");
 const { buildTimeline } = await import("@/lib/engine/timeline");
 
-type FixtureId = (typeof FASE1_IDS)[number];
+type Storyboard = import("@/types/storyboard").Storyboard;
 
-const ids: FixtureId[] = only
-  ? (only.filter((value): value is FixtureId => (FASE1_IDS as string[]).includes(value)))
-  : [...FASE1_IDS];
+interface Named {
+  name: string;
+  storyboard: Storyboard;
+}
 
-if (ids.length === 0) {
-  console.error("Ningún fixture coincide con --only.");
-  process.exit(1);
+/** Every storyboard to render, from the fixtures or from JSON on disk. */
+async function sources(): Promise<Named[]> {
+  if (!storyboardArg) {
+    const ids = only
+      ? (FASE1_IDS as string[]).filter((id) => only.includes(id))
+      : [...(FASE1_IDS as string[])];
+    return ids.map((id) => ({
+      name: id,
+      storyboard: FASE1_FIXTURES[id as keyof typeof FASE1_FIXTURES] as Storyboard,
+    }));
+  }
+
+  const target = path.resolve(ROOT, storyboardArg);
+  const files = target.endsWith(".json")
+    ? [target]
+    : (await readdir(target))
+        // `.plan.json` next to a storyboard is the art director's output, not a
+        // storyboard; rendering it would fail in a confusing way.
+        .filter((file) => file.endsWith(".json") && !file.endsWith(".plan.json"))
+        .sort()
+        .map((file) => path.join(target, file));
+
+  const named: Named[] = [];
+  for (const file of files) {
+    const name = path.basename(file, ".json");
+    if (only && !only.includes(name)) continue;
+    named.push({ name, storyboard: JSON.parse(await readFile(file, "utf8")) as Storyboard });
+  }
+  return named;
 }
 
 interface Shot {
   name: string;
-  storyboard: (typeof FASE1_FIXTURES)[FixtureId];
+  storyboard: Storyboard;
   frame: number;
 }
 
+const found = await sources();
+if (found.length === 0) {
+  console.error("Ningún storyboard que renderizar.");
+  process.exit(1);
+}
+
 const shots: Shot[] = [];
-for (const id of ids) {
-  const storyboard = FASE1_FIXTURES[id];
+for (const { name, storyboard } of found) {
   const timeline = buildTimeline(storyboard);
   timeline.scenes.forEach((scene, index) => {
     shots.push({
       name:
         timeline.scenes.length > 1
-          ? `${id}-escena-${index + 1}${suffix}`
-          : `${id}${suffix}`,
+          ? `${name}-escena-${String(index + 1).padStart(2, "0")}${suffix}`
+          : `${name}${suffix}`,
       storyboard,
       // The last frame the scene owns: everything it draws is finished.
       frame: scene.from + scene.durationInFrames - 1,
