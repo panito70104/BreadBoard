@@ -326,6 +326,208 @@ const table = second.steps.find(
 );
 check(Boolean(table), "la tabla no sobrevivió al validador");
 
+/* ----------------------------- how it looks ------------------------------- */
+
+/*
+ * The checks above are mechanical: nothing jumps, nothing goes backwards, the
+ * camera stays on the board. They all passed while the board was producing
+ * ellipses that swallowed the title and ticks drawn straight through the
+ * drawing they were approving, because none of them ever asked where the ink
+ * actually is.
+ *
+ * These do. Every number here is measured off the real geometry — the sampled
+ * paths the hand will trace and the laid-out rows the text really occupies —
+ * and run over `fixtures/fase1.ts`, which is the set of frames that made the
+ * work necessary, plus the storyboard above.
+ */
+
+const { FASE1_FIXTURES, FASE1_IDS } = await import("@/fixtures/fase1");
+const { partsBounds, boxesOverlap, boxArea } = await import("@/lib/engine/ink-bounds");
+type Box = import("@/lib/engine/board").Box;
+type Part = import("@/lib/engine/parts").Part;
+type ScenePlan = import("@/lib/engine/plan").ScenePlan;
+
+const BOARD_AREA = BOARD.width * BOARD.height;
+
+interface Looks {
+  /** Emphasis whose ink leaves the board. */
+  offBoard: number;
+  /**
+   * Emphasis the camera cuts off at the frame it finishes on.
+   *
+   * A shape can sit inside the board and still be sliced in half on screen:
+   * the camera frames the ink it is told about, and an emphasis reports its
+   * *target* as its bounds rather than the shape it actually draws. So the
+   * planner asks the camera to look at a title and then draws an ellipse twice
+   * its size around it.
+   */
+  cropped: number;
+  /** Emphasis crossing the title's ink when the title is not its target. */
+  overTitle: number;
+  /** Emphasis crossing ink that belongs to something else. */
+  overOther: number;
+  /** The largest share of the board a single emphasis covers. */
+  maxShare: number;
+  /** The furthest a label or caption sits from the ink it belongs to. */
+  maxLabelGap: number;
+  maxLabelGapWhere: string;
+  /** The smallest type size that actually gets drawn. */
+  minText: number;
+  minTextWhere: string;
+  /** Emphasis the planner had to shrink, downgrade or drop. */
+  degraded: string[];
+}
+
+const looks: Looks = {
+  offBoard: 0,
+  cropped: 0,
+  overTitle: 0,
+  overOther: 0,
+  maxShare: 0,
+  maxLabelGap: 0,
+  maxLabelGapWhere: "",
+  minText: Infinity,
+  minTextWhere: "",
+  degraded: [],
+};
+
+/** The vertical gap between a text part and the nearest ink above it. */
+function gapAbove(text: Part, others: Part[]): number | null {
+  if (text.kind !== "text") return null;
+  const box = partsBounds([text]);
+  if (!box) return null;
+
+  let nearest: number | null = null;
+  for (const other of others) {
+    if (other === text || other.kind !== "strokes") continue;
+    const ink = partsBounds([other]);
+    if (!ink) continue;
+    // Only ink this text sits under, and horizontally shares space with.
+    if (ink.y + ink.h > box.y) continue;
+    if (ink.x > box.x + box.w || ink.x + ink.w < box.x) continue;
+    const gap = box.y - (ink.y + ink.h);
+    if (nearest === null || gap < nearest) nearest = gap;
+  }
+  return nearest;
+}
+
+function inspect(label: string, plans: ScenePlan[]) {
+  for (const plan of plans) {
+    for (const warning of plan.warnings ?? []) {
+      looks.degraded.push(`${label}: ${warning}`);
+    }
+
+    // Ink each step leaves, and which slot owns it.
+    const inked = plan.steps
+      .map((step) => ({ step, box: partsBounds(step.parts) }))
+      .filter((entry): entry is { step: (typeof plan.steps)[number]; box: Box } =>
+        Boolean(entry.box),
+      );
+
+    for (const step of plan.steps) {
+      // ---- text size, anywhere it is drawn
+      for (const part of step.parts) {
+        if (part.kind !== "text") continue;
+        if (part.fontSize < looks.minText) {
+          looks.minText = part.fontSize;
+          looks.minTextWhere = `${label} "${part.text.slice(0, 24)}"`;
+        }
+      }
+
+      // ---- how far a label floats from its drawing
+      if (step.element.type === "sketch" || step.element.type === "diagram") {
+        for (const part of step.parts) {
+          const gap = gapAbove(part, step.parts);
+          if (gap !== null && gap > looks.maxLabelGap) {
+            looks.maxLabelGap = gap;
+            looks.maxLabelGapWhere = `${label} ${step.element.type} "${
+              part.kind === "text" ? part.text.slice(0, 20) : ""
+            }"`;
+          }
+        }
+      }
+
+      if (step.element.type !== "emphasis") continue;
+
+      const box = partsBounds(step.parts);
+      if (!box) continue;
+
+      // ---- does it stay on the board?
+      if (box.x < 0 || box.y < 0 || box.x + box.w > BOARD.width || box.y + box.h > BOARD.height) {
+        looks.offBoard += 1;
+        fail.push(
+          `${label}: un énfasis "${step.element.shape}" se sale del tablero ` +
+            `(x ${box.x.toFixed(0)}..${(box.x + box.w).toFixed(0)}, ` +
+            `y ${box.y.toFixed(0)}..${(box.y + box.h).toFixed(0)})`,
+        );
+      }
+
+      // ---- how much of the board does it claim?
+      looks.maxShare = Math.max(looks.maxShare, boxArea(box) / BOARD_AREA);
+
+      // ---- is any of it still on screen once the camera has moved?
+      const frame = endFrameOf(step, BOARD.fps) - 1;
+      const shot = cameraAt(plan.camera, frame, BOARD.fps);
+      const visible: Box = {
+        x: -shot.x / shot.scale,
+        y: -shot.y / shot.scale,
+        w: BOARD.width / shot.scale,
+        h: BOARD.height / shot.scale,
+      };
+      if (
+        box.x < visible.x - 1 ||
+        box.y < visible.y - 1 ||
+        box.x + box.w > visible.x + visible.w + 1 ||
+        box.y + box.h > visible.y + visible.h + 1
+      ) {
+        looks.cropped += 1;
+        fail.push(
+          `${label}: la cámara recorta un énfasis "${step.element.shape}" en f${frame}`,
+        );
+      }
+
+      // ---- does it cross anything that is not its target?
+      const target = step.element.target;
+      for (const other of inked) {
+        if (other.step === step) continue;
+        if (other.step.element.type === "emphasis") continue;
+
+        const ownedByTarget =
+          target === "prev"
+            ? other.step.timed.index === step.timed.index - 1
+            : "slot" in other.step.element
+              ? other.step.element.slot === target
+              : other.step.element.type === "title" && target === "title";
+
+        if (ownedByTarget) continue;
+        // A stroke crossing a couple of pixels of a neighbour is not a defect;
+        // a shape drawn through it is.
+        if (!boxesOverlap(box, other.box, 6)) continue;
+
+        if (other.step.element.type === "title") {
+          looks.overTitle += 1;
+          fail.push(`${label}: un énfasis "${step.element.shape}" cruza el título`);
+        } else {
+          looks.overOther += 1;
+          fail.push(
+            `${label}: un énfasis "${step.element.shape}" cruza la tinta de ` +
+              `${other.step.element.type}`,
+          );
+        }
+      }
+    }
+  }
+}
+
+inspect("prueba", plans);
+for (const id of FASE1_IDS) {
+  inspect(`fixture ${id.toUpperCase()}`, planStoryboard(FASE1_FIXTURES[id]).plans);
+}
+
+// The x-height is what decides whether a label reads at a glance, and it is
+// roughly half the type size in a handwriting face.
+const X_RATIO = 0.5;
+
 /* -------------------------------- report --------------------------------- */
 
 console.log("frames recorridos:", totalFrames);
@@ -334,6 +536,26 @@ console.log("salto máximo con el marcador apoyado:", maxInkJump.toFixed(1), "px
 console.log("frames con el marcador en el aire:", liftedFrames, `(${((liftedFrames / totalFrames) * 100).toFixed(1)}%)`);
 console.log("zoom de la cámara:", minScale.toFixed(3), "a", maxScale.toFixed(3));
 console.log("avisos del validador:", parsed.warnings.map((w) => w.code).join(", "));
+
+console.log("\ncómo se ve:");
+console.log("  énfasis fuera del tablero:", looks.offBoard);
+console.log("  énfasis recortados por la cámara:", looks.cropped);
+console.log("  énfasis que cruzan el título:", looks.overTitle);
+console.log("  énfasis que cruzan otra tinta:", looks.overOther);
+console.log("  mayor área de un énfasis:", `${(looks.maxShare * 100).toFixed(1)}% del tablero`);
+console.log(
+  "  etiqueta más lejos de su tinta:",
+  `${looks.maxLabelGap.toFixed(0)}px`,
+  looks.maxLabelGapWhere,
+);
+console.log(
+  "  texto más pequeño dibujado:",
+  `${looks.minText.toFixed(0)}px de cuerpo`,
+  `(~${(looks.minText * X_RATIO).toFixed(0)}px de altura de x)`,
+  looks.minTextWhere,
+);
+console.log("  degradaciones de énfasis:", looks.degraded.length);
+for (const note of looks.degraded) console.log("   ·", note);
 
 // A stroke is drawn at DRAW_SPEED (1150 px/s) and eased, so it peaks around
 // 1.5x that: ~58px per frame at 30fps, plus a little for the rough wobble.

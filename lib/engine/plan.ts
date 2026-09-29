@@ -65,6 +65,15 @@ export interface ScenePlan {
   scene: TimedScene;
   steps: PlacedStep[];
   camera: CameraKey[];
+  /**
+   * What the planner had to give up on, in plain words.
+   *
+   * Nothing in here ever stops a render: a piece of emphasis that cannot be
+   * drawn anywhere sensible is downgraded to a smaller shape, and then dropped,
+   * and the reason is recorded rather than thrown. A generation that fails is
+   * worth far less than one with a missing underline.
+   */
+  warnings: string[];
 }
 
 const GAP = 22;
@@ -377,6 +386,7 @@ function arrowPaths(from: Box, to: Box): string[] {
 
 export function planScene(scene: TimedScene): ScenePlan {
   const layout: SceneLayout = scene.scene.layout;
+  const warnings: string[] = [];
 
   // 1. Group content by slot, in drawing order, and lay each slot out.
   const bySlot = new Map<Slot, SlotItem[]>();
@@ -446,7 +456,7 @@ export function planScene(scene: TimedScene): ScenePlan {
     return { timed, element, parts, pen: planPen(parts), bounds };
   });
 
-  return { scene, steps, camera: planCamera(cameraShots(steps)) };
+  return { scene, steps, camera: planCamera(cameraShots(steps)), warnings };
 }
 
 /**
